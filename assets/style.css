@@ -45,3 +45,8 @@ button.secondary:hover{background:#f3f7fd}button:disabled{cursor:default;opacity
 .field{font-size:12px;color:#40526b;font-weight:700}
 .field select{margin-top:7px;min-width:190px;max-width:370px;width:100%;padding:10px;border:1px solid #cad7e6;border-radius:8px;background:white;color:#24354a}
 @media(max-width:850px){.registry-summary{grid-template-columns:1fr}}
+/* 0.4.1 : diagnostic complet, consultable sans allonger excessivement la page */
+.registry-details{margin:14px 0;border:1px solid #d4dce5;border-radius:9px;padding:10px 14px}
+.registry-details summary{cursor:pointer;font-weight:600}
+.registry-details .report,.registry-audit .report{max-height:370px;overflow:auto;white-space:pre-wrap}
+.registry-audit{margin:14px 0}

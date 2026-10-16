@@ -91,6 +91,7 @@
       $('workspace').hidden=false; $('emptyState').hidden=true; $('previewTab').disabled=false; $('shortcutStatic').disabled=false;
       librariesTable(obj.libraries); updateReport(); setTab('contenu');
       $('registryFromCurrentBtn').disabled=!window.studioDesktop?.isDesktop;
+      $('registryResolveBtn').disabled=!window.studioDesktop?.isDesktop;
       await refreshRegistry();
       dirty=false; lastValidated=false;
       text('changeStatus','Aucune modification exportée'); $('changeStatus').className='';
@@ -123,7 +124,7 @@
   }
 
   // Registry preferences are stored separately. A selected version NEVER
-  // rewrites library.json, upgrades H5P content or changes HTML export in V0.4.0.
+  // rewrites library.json, upgrades H5P content or changes HTML export in V0.4.1.
   function registryStatus(msg) { text('registryStatus',msg); }
   function option(select,value,label) {
     const el=document.createElement('option');el.value=value;el.textContent=label;select.append(el);
@@ -177,9 +178,48 @@
     if(!window.studioDesktop?.registryList){registryStatus('Le registre nécessite l’application Windows compilée.');return;}
     try{
       registryRows=await window.studioDesktop.registryList();
+      if(window.studioDesktop.registryCoreEvidence){const e=await window.studioDesktop.registryCoreEvidence();text('coreEvidenceStatus',`Lecteur ${e.playerVersion}. API du cœur : NON CERTIFIÉE. Source : ${e.origin?.source || 'métadonnées de provenance indisponibles'}. ${e.explanation}`);}
       registryChoices=projectId?await window.studioDesktop.registryChoices(projectId):{};
       registryRender();registryStatus(`${registryRows.length} variante(s) dans le registre local. Aucune mise à jour automatique.`);
     }catch(e){registryStatus('Échec de lecture du registre : '+(e.message||e));}
+  }
+  function renderImportReport(result){
+    const rows=result.outcomes||[];
+    const summary=[
+      `Manifests library.json trouvés : ${result.totalFound}`,
+      `Nouvelles installations : ${result.installed.length}`,
+      `Déjà présentes dans le registre : ${result.skipped.length}`,
+      `Rejets : ${result.errors.length}`,
+      '',
+      result.notice||'Le total du registre inclut les imports précédents.',
+      '',
+      ...rows.map(r=>`${r.status==='installed'?'INSTALLÉE':r.status==='already-installed'?'DÉJÀ PRÉSENTE':'REJETÉE'} | ${r.manifest} | ${r.library||'?'} ${r.version||''}${r.reason?' | '+r.reason:''}`)
+    ];
+    text('registryImportReport',summary.join('\n'));
+  }
+  async function resolveRegistry(){
+    if(!project||!projectId||!window.studioDesktop?.registryResolve)return;
+    text('registryResolveReport','Analyse des dépendances installées en cours…');
+    try{
+      const roots=project.metadata?.preloadedDependencies;
+      if(!Array.isArray(roots))throw Error('Le h5p.json ne fournit pas de tableau preloadedDependencies.');
+      const r=await window.studioDesktop.registryResolve(projectId,roots);
+      const lines=[
+        `État : ${r.status.toUpperCase()} (contrôle statique uniquement)`,
+        `Dépendances directes déclarées : ${r.rootCount}`,
+        `Bibliothèques résolues : ${r.selection.length}`,
+        `Exigence d’API maximale identifiée : ${r.requiredApi.majorVersion}.${r.requiredApi.minorVersion}`,
+        `API du cœur Standalone : ${r.coreStatus==='non-certifie'?'NON CERTIFIÉE':r.actualCore.majorVersion+'.'+r.actualCore.minorVersion}`,
+        `Problèmes détectés : ${r.problems.length}`,
+        '', 'BIBLIOTHÈQUES RÉSOLUES :',
+        ...r.selection.map(x=>` • ${x.machineName} ${x.version} [${x.sha256?.slice(0,12)||'?'}] (${x.origin||'origine inconnue'})`),
+        '', 'PROBLÈMES ET AMBIGUÏTÉS :',
+        ...(r.problems.length?r.problems.map(x=>' • '+JSON.stringify(x)):[' Aucun dans le graphe statique.']),
+        '', 'Aucune migration et aucune substitution de bibliothèques ne sont effectuées.',
+        'Un contrôle statique ne garantit pas l’exécution de l’activité ni la compatibilité de son éditeur.'
+      ];
+      text('registryResolveReport',lines.join('\n'));
+    }catch(e){text('registryResolveReport','Résolution impossible : '+(e.message||e));}
   }
   async function importCurrentLibraries(){
     if(!project||!importBytes)return;
@@ -188,7 +228,8 @@
     registryStatus('Analyse et copie des bibliothèques en cours…');
     try{
       const result=await window.studioDesktop.registryImportOpen(importBytes,filename);
-      registryStatus(`Bibliothèques trouvées : ${result.totalFound}. Nouvelles : ${result.installed.length}. Déjà présentes : ${result.skipped.length}. Erreurs : ${result.errors.length}.`);
+      registryStatus(`Manifests trouvés : ${result.totalFound}. Nouvelles : ${result.installed.length}. Déjà présentes : ${result.skipped.length}. Rejets : ${result.errors.length}.`);
+      renderImportReport(result);
       await refreshRegistry();
       if(result.errors.length)showAlert('Certaines bibliothèques n’ont pas été enregistrées : '+result.errors.slice(0,3).map(x=>x.library+' : '+x.reason).join(' ; '),'warning');
       else showAlert('Bibliothèques ajoutées au registre sans modifier le H5P ouvert.','success');
@@ -203,8 +244,9 @@
       registryStatus('Analyse du paquet sélectionné…');
       const result=await window.studioDesktop.registryImportLocal();
       if(result.cancelled){registryStatus('Import annulé.');return;}
+      renderImportReport(result);
       await refreshRegistry();
-      registryStatus(`Bibliothèques trouvées : ${result.totalFound}, nouvelles : ${result.installed.length}, déjà présentes : ${result.skipped.length}, erreurs : ${result.errors.length}.`);
+      registryStatus(`Manifests trouvés : ${result.totalFound}, nouvelles : ${result.installed.length}, déjà présentes : ${result.skipped.length}, rejets : ${result.errors.length}.`);
       if(result.errors.length)showAlert(result.errors.slice(0,3).map(x=>x.library+' : '+x.reason).join(' ; '),'warning');
     }catch(e){registryStatus('Import impossible : '+(e.message||e));showAlert(e.message||String(e),'error');}
   }
@@ -286,6 +328,7 @@
   $('refreshRegistryBtn').addEventListener('click',refreshRegistry);
   $('registryLibrarySelect').addEventListener('change',registryVersions);
   $('registrySelectBtn').addEventListener('click',storeChoice);
+  $('registryResolveBtn').addEventListener('click',resolveRegistry);
   $('importBtn').addEventListener('click',()=> $('fileInput').click());
   $('fileInput').addEventListener('change',e=>importFile(e.target.files[0]));
   $('saveBtn').addEventListener('click',exportH5P);

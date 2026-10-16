@@ -9,6 +9,8 @@ if(process.isMainFrame){
   importPlayer:()=>ipcRenderer.invoke('desktop:import-player'),
   revealExport:()=>ipcRenderer.invoke('desktop:reveal-export'),
   registryList:()=>ipcRenderer.invoke('registry:list'),
+  registryCoreEvidence:()=>ipcRenderer.invoke('registry:core-evidence'),
+  registryResolve:(projectId,roots)=>ipcRenderer.invoke('registry:resolve',projectId,roots),
   registryFingerprint:bytes=>ipcRenderer.invoke('registry:fingerprint',bytes),
   registryImportOpen:(bytes,name)=>ipcRenderer.invoke('registry:import-open',bytes,name),
   registryImportLocal:()=>ipcRenderer.invoke('registry:import-local'),

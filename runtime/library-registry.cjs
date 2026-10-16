@@ -80,7 +80,7 @@ async function extractLibraries(source,root,{sourceName='import local',origin='l
   // contain many named folders at the top level.
   const manifests=Object.entries(zip.files).filter(([p,f])=>!f.dir && (p==='library.json'||/^[^/]+\/library\.json$/.test(p)));
   if(!manifests.length)throw Error('Aucune bibliothèque avec library.json trouvée dans l’archive.');
-  const installed=[],skipped=[],errors=[];
+  const installed=[],skipped=[],errors=[],outcomes=[];
   for(const [manifestPath,manifestFile] of manifests){
     let staging=null;
     try{
@@ -102,7 +102,7 @@ async function extractLibraries(source,root,{sourceName='import local',origin='l
       const dest=path.join(pathOf(root,info),hash);
       const meta={...info,id:variantId,sha256:hash,origin,sourceName:sanitizeLabel(sourceName),
         importedAt:new Date().toISOString(),files:contentFiles.length};
-      if(fs.existsSync(path.join(dest,'.studio-library.json'))){skipped.push(meta);continue;}
+      if(fs.existsSync(path.join(dest,'.studio-library.json'))){skipped.push(meta);outcomes.push({manifest:manifestPath,status:'already-installed',library:info.machineName,version:versionString(info),id:variantId,reason:'Variante identique déjà présente'});continue;}
       const stageRoot=path.join(root,'.stage');await fsp.mkdir(stageRoot,{recursive:true});
       staging=await fsp.mkdtemp(path.join(stageRoot,'library-'));
       await fsp.mkdir(path.join(staging,'payload'),{recursive:true});
@@ -115,12 +115,14 @@ async function extractLibraries(source,root,{sourceName='import local',origin='l
       await fsp.writeFile(path.join(staging,'.studio-library.json'),JSON.stringify(meta,null,2),'utf8');
       await fsp.mkdir(path.dirname(dest),{recursive:true});
       // No replacement of an existing variant.
-      try{await fsp.rename(staging,dest);staging=null;installed.push(meta);}
-      catch(e){if(e.code==='EEXIST'||e.code==='ENOTEMPTY'){skipped.push(meta);}else throw e;}
-    }catch(e){errors.push({library:manifestPath,reason:String(e.message||e).slice(0,500)});}
+      try{await fsp.rename(staging,dest);staging=null;installed.push(meta);outcomes.push({manifest:manifestPath,status:'installed',library:info.machineName,version:versionString(info),id:variantId});}
+      catch(e){if(e.code==='EEXIST'||e.code==='ENOTEMPTY'){skipped.push(meta);outcomes.push({manifest:manifestPath,status:'already-installed',library:info.machineName,version:versionString(info),id:variantId,reason:'Variante existante'});}else throw e;}
+    }catch(e){const reason=String(e.message||e).slice(0,500);errors.push({library:manifestPath,reason});outcomes.push({manifest:manifestPath,status:'rejected',reason});}
     finally{if(staging)await fsp.rm(staging,{recursive:true,force:true}).catch(()=>{});}
   }
-  return {installed,skipped,errors,totalFound:manifests.length};
+  return {installed,skipped,errors,totalFound:manifests.length,
+    outcomes,counts:{manifests:manifests.length,installed:installed.length,alreadyInstalled:skipped.length,rejected:errors.length},
+    notice:'Le total du registre comprend les imports antérieurs. Le bilan ci-dessus porte uniquement sur cette archive.'};
 }
 async function listLibraries(root){
   ensureSafeRoot(root);if(!fs.existsSync(root))return [];
