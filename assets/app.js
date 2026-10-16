@@ -138,6 +138,7 @@
     loading(true);clearAlert();setTab('preview');
     text('previewStatus','Préparation du lecteur et de l’activité…');
     $('previewContainer').hidden=true;
+    $('readerFallback').hidden=true;
     try {
       const result=await window.studioDesktop.preview(await siteBytes());
       const frame=$('previewFrame'); frame.src=result.url;
@@ -145,20 +146,28 @@
       text('previewStatus','Lecture intégrée initialisée. '+result.reader+'. Vérifiez les interactions.');
     } catch(e) {
       text('previewStatus','Prévisualisation impossible.');
-      $('readerFallback').hidden=false;
-      showAlert('Erreur du moteur de prévisualisation : '+(e.message||String(e)), 'error');
+      const reason=e.message||String(e);
+      $('readerFallback').hidden=!/(?:lecteur|npm|téléchargement|réseau|network|fetch|incomplet)/i.test(reason);
+      showAlert('Erreur du moteur de prévisualisation : '+reason, 'error');
     }finally{loading(false);}
   }
   async function exportStaticPreview() {
     if (!canPreview())return;
     loading(true);clearAlert();setTab('preview');
+    $('readerFallback').hidden=true;
     text('previewStatus','Création du site HTML autonome avec lecteur embarqué…');
     try {
       const meta=H5PArchive.validateEditing($('metadataJson').value,$('contentJson').value);
       const result=await window.studioDesktop.export(await siteBytes(),meta.metadata.title);
-      text('previewStatus','Export réalisé : '+result.path);
-      showAlert('ZIP HTML autonome généré avec le lecteur inclus dans exports/. Aucun script à lancer après publication sur un serveur web.', 'success');
-    }catch(e){text('previewStatus','Échec de génération');showAlert(e.message||String(e),'error');$('readerFallback').hidden=false;}
+      if(result.cancelled){text('previewStatus','Export annulé.');return;}
+      text('previewStatus','ZIP enregistré : '+result.path);
+      $('revealExportBtn').hidden=false;
+      showAlert('ZIP HTML autonome enregistré : '+result.path+'  Cliquez sur « Afficher le ZIP » pour le retrouver.', 'success');
+    }catch(e){
+      const reason=e.message||String(e);
+      text('previewStatus','Échec de génération');showAlert(reason,'error');
+      $('readerFallback').hidden=!/(?:lecteur|npm|téléchargement|réseau|network|fetch|incomplet)/i.test(reason);
+    }
     finally{loading(false);}
   }
   async function doReset() {
@@ -173,6 +182,10 @@
   $('fileInput').addEventListener('change',e=>importFile(e.target.files[0]));
   $('saveBtn').addEventListener('click',exportH5P);
   $('staticBtn').addEventListener('click',exportStaticPreview);
+  $('revealExportBtn').addEventListener('click',async()=>{
+    try{const result=await window.studioDesktop.revealExport();if(!result?.ok)showAlert('Aucun ZIP exporté à afficher.','warning');}
+    catch(e){showAlert(e.message||String(e),'error');}
+  });
   $('viewBtn').addEventListener('click',doPreview);
   $('importReaderBtn').addEventListener('click',async()=>{
     if(!window.studioDesktop)return;

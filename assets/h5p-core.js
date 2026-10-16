@@ -206,9 +206,9 @@
   async function saveArchive(project, metadataText, contentText, onProgress) {
     if (!project || !project.zip) throw new Error('Aucun fichier H5P chargé.');
     const checked = validateEditing(metadataText, contentText);
-    // JSZip.clone() duplicates the file registry; replacing its JSON entries does
-    // not mutate the imported project's file registry or binary assets.
+    // JSZip.clone() actually SHARES the files registry. Detach before writing.
     const output = project.zip.clone();
+    output.files = {...project.zip.files};
     output.file('h5p.json', JSON.stringify(checked.metadata,null,2));
     output.file('content/content.json', JSON.stringify(checked.content,null,2));
     const blob = await output.generateAsync({type:'blob', compression:'DEFLATE', compressionOptions:{level:6}},

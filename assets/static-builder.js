@@ -160,7 +160,11 @@ try{while($true){
       if(name.includes('\\')||name.startsWith('/')||name.split('/').some(s=>s==='..'||s==='.'||!s))throw Error('Chemin dangereux : '+name);
       if(reserved.test(name))throw Error('Archive contient un chemin réservé au lecteur : '+name);
     }
+    // JSZip.clone() shares its files registry with the source ZIP. Detach it.
+    // Otherwise generating a static site contaminates the imported H5P in memory
+    // (index.html, viewer/ etc.) and every subsequent operation fails.
     const output=project.zip.clone();
+    output.files={...project.zip.files};
     if(onProgress)onProgress(5);
     output.file('h5p.json',JSON.stringify(edited.metadata,null,2));
     output.file('content/content.json',JSON.stringify(edited.content,null,2));

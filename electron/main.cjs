@@ -1,15 +1,15 @@
 'use strict';
-const {app,BrowserWindow,ipcMain,dialog,session}=require('electron');
+const {app,BrowserWindow,ipcMain,dialog,session,shell}=require('electron');
 const fs=require('node:fs');const fsp=fs.promises;const path=require('node:path');const os=require('node:os');const crypto=require('node:crypto');
 const {ensureRuntime,adoptLocalPlayer,PLAYER_VERSION}=require('../runtime/player-manager.cjs');
 const {extractPreview,exportStaticZip,startPreviewServer}=require('../runtime/studio-site.cjs');
-const APP_VERSION='0.3.0';
+const APP_VERSION='0.3.1';
 const portableRoot=process.env.PORTABLE_EXECUTABLE_DIR || path.resolve(__dirname,'..');
 const profilePath=path.join(portableRoot,'data','electron-profile');
 try{fs.mkdirSync(profilePath,{recursive:true});app.setPath('userData',profilePath)}
 catch(e){console.error('Profil portable indisponible : '+e.message)}
 app.setAppUserModelId('local.h5pstudio.portable');
-let mainWindow=null, preview=null, workdir=null, playerPromise=null;
+let mainWindow=null, preview=null, workdir=null, playerPromise=null, lastExport=null;
 const cacheDir=path.join(portableRoot,'data','runtime','standalone',PLAYER_VERSION);
 const bundledDir=app.isPackaged?path.join(process.resourcesPath,'reader',PLAYER_VERSION):path.join(portableRoot,'runtime-bundled',PLAYER_VERSION);
 const exportsDir=path.join(portableRoot,'exports');
@@ -51,15 +51,30 @@ ipcMain.handle('desktop:preview',async(e,bytes)=>{
 ipcMain.handle('desktop:export',async(e,bytes,title)=>{
  checkCaller(e);
  const input=await prepareBytes(bytes);
- const runtime=await player();
- await fsp.mkdir(exportsDir,{recursive:true});
  const filename='h5p-site-'+safeTitle(title)+'-'+Date.now()+'.zip';
- const result=await exportStaticZip(input,runtime.dir,path.join(exportsDir,filename));
- return {...result,name:filename,reader:runtime.source};
+ await fsp.mkdir(exportsDir,{recursive:true});
+ const save=await dialog.showSaveDialog(mainWindow,{
+   title:'Enregistrer le site H5P autonome',
+   defaultPath:path.join(exportsDir,filename),
+   buttonLabel:'Enregistrer le ZIP',
+   filters:[{name:'Archives ZIP',extensions:['zip']}],
+   properties:['showOverwriteConfirmation']
+ });
+ if(save.canceled||!save.filePath)return {cancelled:true};
+ const runtime=await player();
+ const result=await exportStaticZip(input,runtime.dir,save.filePath);
+ lastExport=result.path;
+ return {...result,name:path.basename(result.path),reader:runtime.source};
+});
+ipcMain.handle('desktop:reveal-export',async(e)=>{
+ checkCaller(e);
+ if(!lastExport||!fs.existsSync(lastExport))return {ok:false};
+ shell.showItemInFolder(lastExport);
+ return {ok:true};
 });
 function createWindow(){
  mainWindow=new BrowserWindow({
-  title:'H5P Studio Portable 0.3.0',width:1400,height:930,minWidth:920,minHeight:650,
+  title:'H5P Studio Portable 0.3.1',width:1400,height:930,minWidth:920,minHeight:650,
   backgroundColor:'#f5f7fa',show:false,
   webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,
    preload:path.join(__dirname,'preload.cjs')}

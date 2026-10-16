@@ -37,7 +37,7 @@ async function assembleZip(raw,playerDir) {
   assertSafeFile(rel);z.file('player/'+rel,await fsp.readFile(absolute));
  });
  const manifest=JSON.parse(await z.file('studio-manifest.json').async('string'));
- manifest.generatorVersion='0.3.0';
+ manifest.generatorVersion='0.3.1';
  manifest.runtime.included=true;manifest.runtime.downloadRequired=false;
  manifest.limitations=['Exécution locale testée manuellement selon le contenu','Compatibilité avec Moodle à valider sur votre instance'];
  z.file('studio-manifest.json',JSON.stringify(manifest,null,2));
@@ -60,7 +60,7 @@ async function extractPreview(raw,playerDir,target) {
   }));
  }
  const manifest=JSON.parse(await z.file('studio-manifest.json').async('string'));
- manifest.generatorVersion='0.3.0';manifest.runtime.included=true;manifest.runtime.downloadRequired=false;
+ manifest.generatorVersion='0.3.1';manifest.runtime.included=true;manifest.runtime.downloadRequired=false;
  await fsp.writeFile(path.join(target,'studio-manifest.json'),JSON.stringify(manifest,null,2));
  return {folder:target,playerDir};
 }
