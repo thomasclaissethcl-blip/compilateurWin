@@ -26,11 +26,11 @@ jobs:
       - run: npm run build:win:folder
       - uses: actions/upload-artifact@v4
         with:
-          name: H5P-Studio-Portable-0.3.2-Windows-EXE
+          name: H5P-Studio-Portable-0.3.3-Windows-EXE
           path: dist/*.exe
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
-          name: H5P-Studio-Portable-0.3.2-Windows-DOSSIER
+          name: H5P-Studio-Portable-0.3.3-Windows-DOSSIER
           path: dist/win-unpacked/
           if-no-files-found: error
