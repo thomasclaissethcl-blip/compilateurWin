@@ -4,7 +4,8 @@ const fs=require('node:fs');const fsp=fs.promises;const path=require('node:path'
 const {ensureRuntime,adoptLocalPlayer,PLAYER_VERSION}=require('../runtime/player-manager.cjs');
 const {extractPreview,exportStaticZip,startPreviewServer}=require('../runtime/studio-site.cjs');
 const {portableRoot:resolvePortableRoot}=require('../runtime/portable-path.cjs');
-const APP_VERSION='0.3.3';
+const {fullscreenAllowed}=require('../runtime/fullscreen-permission.cjs');
+const APP_VERSION='0.3.4';
 // On packaged folder builds, __dirname belongs to resources/app.asar (read only).
 // Data must live next to the real executable, never inside app.asar.
 const portableRoot=resolvePortableRoot({portableDir:process.env.PORTABLE_EXECUTABLE_DIR,
@@ -88,7 +89,7 @@ ipcMain.handle('desktop:reveal-export',async(e)=>{
 });
 function createWindow(){
  mainWindow=new BrowserWindow({
-  title:'H5P Studio Portable 0.3.3',width:1400,height:930,minWidth:920,minHeight:650,
+  title:'H5P Studio Portable 0.3.4',width:1400,height:930,minWidth:920,minHeight:650,
   backgroundColor:'#f5f7fa',show:true,
   webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,
    preload:path.join(__dirname,'preload.cjs')}
@@ -107,8 +108,17 @@ function createWindow(){
 }
 app.whenReady().then(async()=>{
  await fsp.mkdir(exportsDir,{recursive:true});
- session.defaultSession.setPermissionRequestHandler((_contents,_permission,callback)=>callback(false));
- session.defaultSession.setPermissionCheckHandler(()=>false);
+ // Fullscreen is the only permission permitted, and only for our active local preview.
+ // All other web permissions remain denied (camera, microphone, geolocation, etc.).
+ session.defaultSession.setPermissionRequestHandler((contents,permission,callback,details)=>{
+  callback(fullscreenAllowed({permission,previewUrl:preview?.url,
+   isAppWindow:!!mainWindow && contents===mainWindow.webContents,
+   requestingUrl:details?.requestingUrl||''}));
+ });
+ session.defaultSession.setPermissionCheckHandler((contents,permission,requestingOrigin,details)=>
+  fullscreenAllowed({permission,previewUrl:preview?.url,
+   isAppWindow:!!mainWindow && contents===mainWindow.webContents,
+   requestingUrl:details?.requestingUrl||requestingOrigin||''}));
  session.defaultSession.on('will-download',(event,item)=>{
   if(!/\.h5p$/i.test(item.getFilename())){event.preventDefault();return;}
   const name=path.basename(item.getFilename()).replace(/[^a-zA-Z0-9_.-]/g,'_').slice(0,130);

@@ -71,7 +71,7 @@ async function init(){
   librariesPath:directory,
   frameJs:new URL('player/frame.bundle.js',location.href).href,
   frameCss:new URL('player/styles/h5p.css',location.href).href,
-  frame:false,export:false,reportingIsEnabled:false,saveFreq:0
+  frame:false,fullScreen:true,export:false,reportingIsEnabled:false,saveFreq:0
  });
 }
 init().then(()=>status('',false))

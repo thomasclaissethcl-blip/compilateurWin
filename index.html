@@ -24,7 +24,7 @@
       <button id="shortcutStatic" disabled title="Importez un H5P pour produire un ZIP HTML autonome">Export HTML multifichier</button>
       <button disabled title="Gestionnaire de mises à jour : à développer">Mises à jour H5P (à venir)</button>
    </nav>
-   <div class="side-foot">Version 0.3.2<br>Moteur embarqué lors de la compilation. Aucun installateur nécessaire.</div>
+   <div class="side-foot">Version 0.3.4<br>Moteur embarqué lors de la compilation. Aucun installateur nécessaire.</div>
  </aside>
  <main class="main">
    <div class="head"><div><h1>Atelier d'archives H5P</h1><p class="subtitle">Importer, inspecter, prévisualiser et exporter sans manipuler de scripts.</p></div><div class="version">V0.3.2 développement</div></div>
@@ -66,7 +66,7 @@
           <button id="revealExportBtn" class="secondary" type="button" hidden>Afficher le ZIP dans son dossier</button></div>
         <p id="previewStatus" class="muted" role="status" aria-live="polite">Importez un fichier H5P pour prévisualiser.</p>
         <div class="preview-container" id="previewContainer" hidden>
-          <iframe id="previewFrame" title="Activité H5P prévisualisée" sandbox="allow-scripts allow-same-origin allow-forms allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe>
+          <iframe id="previewFrame" title="Activité H5P prévisualisée" allow="fullscreen" allowfullscreen sandbox="allow-scripts allow-same-origin allow-forms allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe>
         </div>
         <div class="muted" id="desktopFallback" hidden>
           L’aperçu intégré nécessite l’application Electron. Ce fichier HTML ouvert directement dans un navigateur permet seulement le diagnostic et l’édition JSON.

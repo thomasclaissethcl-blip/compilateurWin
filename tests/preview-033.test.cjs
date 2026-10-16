@@ -68,7 +68,7 @@ test('static production ZIP includes no header/status panel, title or validation
  assert.match(bootstrap,/document\.title=meta\.title/);
  assert.match(css,/#playerNote\[hidden\]/);
  const info=JSON.parse(await zip.file('studio-manifest.json').async('string'));
- assert.equal(info.generatorVersion,'0.3.3');
+ assert.equal(info.generatorVersion,'0.3.4');
 }));
 
 test('bootstrap supplies slash-free directory URLs; production success hides status',async()=>{
