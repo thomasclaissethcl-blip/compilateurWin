@@ -33,30 +33,88 @@ async function boundedResponse(url) {
   for await(const c of res.body) { n+=c.length; if(n>MAX_DOWNLOAD_BYTES)throw Error('Limite de téléchargement dépassée.');chunks.push(Buffer.from(c)); }
   return Buffer.concat(chunks);
 }
-function untarDist(tgz) {
-  const tar=zlib.gunzipSync(tgz,{maxOutputLength:MAX_TAR_BYTES});
-  const result = new Map();
-  for(let offset=0;offset+512<=tar.length;) {
-    const header=tar.subarray(offset,offset+512);
-    if(header.every(x=>x===0))break;
-    const field=(start,length)=>header.toString('utf8',start,start+length).replace(/\0.*$/s,'');
-    const sizeOct=field(124,12).trim();
-    const size=sizeOct ? parseInt(sizeOct,8) : 0;
-    if(!Number.isSafeInteger(size)||size<0)throw Error('TAR invalide (taille).');
-    const fullName=field(0,100); const prefix=field(345,155);
-    const name=prefix ? prefix+'/'+fullName : fullName;
-    const type=field(156,1) || '0';
-    const start=offset+512, end=start+size;
-    if(end>tar.length)throw Error('TAR incomplet.');
-    if(name.startsWith('package/dist/') && (type==='0'||type==='')) {
-      const rel=name.slice('package/dist/'.length);
-      if(!rel || rel.startsWith('/') || rel.includes('\\') || rel.split('/').some(s=>!s||s==='..'||s==='.') || /[\x00-\x1f]/.test(rel))throw Error('Chemin TAR interdit.');
-      if(result.has(rel))throw Error('Entrée TAR dupliquée : '+rel);
-      result.set(rel,Buffer.from(tar.subarray(start,end)));
+function decodePax(data) {
+  // PAX record: <decimal byte count><space><key>=<value><newline>.
+  // The byte count, not the number of characters, defines the record boundary.
+  const result = {};
+  let offset = 0;
+  while (offset < data.length) {
+    const space = data.indexOf(0x20, offset);
+    if (space < 0 || space - offset > 15) throw Error('En-tête PAX invalide (longueur).');
+    const lengthString = data.toString('ascii', offset, space);
+    if (!/^[1-9][0-9]*$/.test(lengthString)) throw Error('En-tête PAX invalide (taille).');
+    const length = Number(lengthString);
+    const finish = offset + length;
+    if (!Number.isSafeInteger(length) || finish > data.length || finish <= space + 2 || data[finish - 1] !== 0x0a) {
+      throw Error('En-tête PAX incomplet.');
     }
-    offset=start+Math.ceil(size/512)*512;
+    const eq = data.indexOf(0x3d, space + 1);
+    if (eq < space + 2 || eq >= finish - 1) throw Error('En-tête PAX invalide (clé).');
+    const key = data.toString('utf8', space + 1, eq);
+    const value = data.toString('utf8', eq + 1, finish - 1);
+    if (key === 'path' || key === 'size') result[key] = value;
+    offset = finish;
   }
-  for(const name of PLAYER_FILES)if(!result.has(name))throw Error('Lecteur npm incomplet : '+name);
+  return result;
+}
+function tarEntrySize(header, overrides) {
+  const sizeOct = header.toString('ascii', 124, 136).replace(/\0.*$/s, '').trim();
+  if (sizeOct && !/^[0-7]+$/.test(sizeOct)) throw Error('TAR invalide (taille octale).');
+  const rawSize = sizeOct ? parseInt(sizeOct, 8) : 0;
+  const size = overrides && overrides.size !== undefined ? Number(overrides.size) : rawSize;
+  if (!Number.isSafeInteger(size) || size < 0 || size > MAX_TAR_BYTES ||
+      (overrides && overrides.size !== undefined && !/^(0|[1-9][0-9]*)$/.test(overrides.size))) {
+    throw Error('TAR invalide (taille).');
+  }
+  return size;
+}
+function untarDist(tgz) {
+  const tar = zlib.gunzipSync(tgz, {maxOutputLength:MAX_TAR_BYTES});
+  const result = new Map();
+  let nextPax = null;
+  let globalPax = {};
+  let gnuLongName = null;
+  let entries = 0;
+  for (let offset = 0; offset + 512 <= tar.length;) {
+    if (++entries > 100000) throw Error('TAR trop volumineux (nombre de fichiers).');
+    const header = tar.subarray(offset, offset + 512);
+    if (header.every(x => x === 0)) break;
+    const field = (start, length) => header.toString('utf8', start, start + length).replace(/\0.*$/s, '');
+    const type = field(156, 1) || '0';
+    // Metadata records are sized by their own header, not by a prior PAX file size.
+    const overrides = ['x','g','L','K'].includes(type) ? null : {...globalPax, ...(nextPax || {})};
+    const size = tarEntrySize(header, overrides);
+    const start = offset + 512, end = start + size;
+    if (end > tar.length) throw Error('TAR incomplet.');
+    const payload = tar.subarray(start, end);
+    if (type === 'x') {
+      nextPax = {...(nextPax || {}), ...decodePax(payload)};
+    } else if (type === 'g') {
+      globalPax = {...globalPax, ...decodePax(payload)};
+    } else if (type === 'L') {
+      gnuLongName = payload.toString('utf8').replace(/\0.*$/s,'').replace(/\n$/,'');
+    } else if (type === 'K') {
+      // GNU long link targets are irrelevant; only regular files are extracted.
+    } else {
+      const fullName = field(0, 100), prefix = field(345, 155);
+      const headerName = prefix ? prefix + '/' + fullName : fullName;
+      // Modern npm TAR archives use PAX `path` when a long filename does not
+      // fit in the 100-byte field. Ignoring it causes false duplicate names.
+      const name = nextPax?.path || gnuLongName || globalPax.path || headerName;
+      nextPax = null;
+      gnuLongName = null;
+      if (name.startsWith('package/dist/') && (type === '0' || type === '')) {
+        const rel = name.slice('package/dist/'.length);
+        if (!rel || rel.startsWith('/') || rel.includes('\\') ||
+            rel.split('/').some(s => !s || s === '..' || s === '.') || /[\x00-\x1f]/.test(rel) ||
+            rel.includes(':')) throw Error('Chemin TAR interdit.');
+        if (result.has(rel)) throw Error('Entrée TAR réellement dupliquée : ' + rel);
+        result.set(rel, Buffer.from(payload));
+      }
+    }
+    offset = start + Math.ceil(size / 512) * 512;
+  }
+  for (const name of PLAYER_FILES) if (!result.has(name)) throw Error('Lecteur npm incomplet : ' + name);
   return result;
 }
 async function fetchRuntime(destination) {
