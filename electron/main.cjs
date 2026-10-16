@@ -4,7 +4,7 @@ const fs=require('node:fs');const fsp=fs.promises;const path=require('node:path'
 const {ensureRuntime,adoptLocalPlayer,PLAYER_VERSION}=require('../runtime/player-manager.cjs');
 const {extractPreview,exportStaticZip,startPreviewServer}=require('../runtime/studio-site.cjs');
 const {portableRoot:resolvePortableRoot}=require('../runtime/portable-path.cjs');
-const APP_VERSION='0.3.2';
+const APP_VERSION='0.3.3';
 // On packaged folder builds, __dirname belongs to resources/app.asar (read only).
 // Data must live next to the real executable, never inside app.asar.
 const portableRoot=resolvePortableRoot({portableDir:process.env.PORTABLE_EXECUTABLE_DIR,
@@ -88,7 +88,7 @@ ipcMain.handle('desktop:reveal-export',async(e)=>{
 });
 function createWindow(){
  mainWindow=new BrowserWindow({
-  title:'H5P Studio Portable 0.3.2',width:1400,height:930,minWidth:920,minHeight:650,
+  title:'H5P Studio Portable 0.3.3',width:1400,height:930,minWidth:920,minHeight:650,
   backgroundColor:'#f5f7fa',show:true,
   webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,
    preload:path.join(__dirname,'preload.cjs')}

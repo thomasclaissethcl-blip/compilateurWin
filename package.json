@@ -1,7 +1,7 @@
 {
   "name": "h5p-studio-portable",
   "productName": "H5P Studio Portable",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Portable Windows H5P studio: diagnostics, integrated preview and standalone HTML export",
   "private": true,
   "main": "electron/main.cjs",
@@ -40,7 +40,7 @@
           ]
         }
       ],
-      "artifactName": "H5P-Studio-Portable-0.3.2-${arch}.${ext}"
+      "artifactName": "H5P-Studio-Portable-0.3.3-${arch}.${ext}"
     },
     "portable": {
       "requestExecutionLevel": "user"

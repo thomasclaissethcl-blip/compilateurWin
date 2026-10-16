@@ -23,18 +23,17 @@ test('Bootstrap validates executable code, uses absolute document-derived paths,
  assert.doesNotThrow(()=>new Function(code));
  assert.match(code,/new URL\('h5p.json',location.href\)/);
  assert.match(code,/location.protocol==='file:'/);
- assert.match(code,/contentJsonPath:new URL\('content\/',location.href\).href/);
- const elem={textContent:'',classList:{toggle(){}}};
+ assert.match(code,/const contentDirectory=new URL\('content',location.href\)/);
+ const elem={textContent:'',hidden:true};
  const ctx={document:{getElementById:()=>elem},window:{fetch:async()=>{throw Error('must not fetch file protocol')},addEventListener(){}}, location:{protocol:'file:',href:'file:///C:/site/index.html'}, URL, console};
  vm.runInNewContext(code,ctx);
  assert.match(elem.textContent,/HTTP\(S\)/);
 });
 test('Bootstrap diagnostic: reject HTML as JSON with explicit file path',async()=>{
  const code=builder.templates.BOOTSTRAP;
- const note={textContent:'',classList:{toggle(){}}};
- const title={textContent:''};
+ const note={textContent:'',hidden:true};
  const ctx={
-   document:{getElementById:(id)=>id==='siteTitle'?title:note},
+   document:{title:'',getElementById:()=>note},
    window:{fetch:async()=>({ok:true,status:200,headers:{get:()=> 'text/html'},text:async()=> '<!doctype html><title>index</title>'}),addEventListener(){}},
    location:{protocol:'http:',href:'http://127.0.0.1:8080/index.html'},URL,console
  };
@@ -44,12 +43,11 @@ test('Bootstrap diagnostic: reject HTML as JSON with explicit file path',async()
 });
 test('Bootstrap success: library root and content URLs remain under a Moodle subdirectory',async()=>{
  const code=builder.templates.BOOTSTRAP;
- const note={textContent:'',classList:{toggle(){}}};
- const title={textContent:''};
+ const note={textContent:'',hidden:true};
  let observed;
  const pathBase='https://moodle.example/pluginfile.php/42/mod_resource/content/0/';
  const ctx={
-  document:{getElementById:(id)=>id==='siteTitle'?title:note},
+  document:{title:'',getElementById:()=>note},
   window:{
    fetch:async()=>({ok:true,status:200,headers:{get:()=> 'application/json'},text:async()=> JSON.stringify({title:'Démo'})}),
    addEventListener(){},
@@ -59,8 +57,10 @@ test('Bootstrap success: library root and content URLs remain under a Moodle sub
  };
  vm.runInNewContext(code,ctx);
  for(let i=0;i<15&&!observed;i++)await new Promise(r=>setTimeout(r,1));
- assert.equal(observed.h5pJsonPath,pathBase);
- assert.equal(observed.contentJsonPath,pathBase+'content/');
- assert.equal(observed.librariesPath,pathBase);
+ assert.equal(observed.h5pJsonPath,pathBase.slice(0,-1));
+ assert.equal(observed.contentJsonPath,pathBase+'content');
+ assert.equal(observed.librariesPath,pathBase.slice(0,-1));
  assert.equal(observed.frameJs,pathBase+'player/frame.bundle.js');
+ assert.equal(note.hidden,true,'No production banner on successful initialization');
+ assert.equal(note.textContent,'','No production status message');
 });

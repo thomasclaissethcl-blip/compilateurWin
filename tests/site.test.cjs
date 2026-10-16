@@ -84,6 +84,6 @@ test('manifest : version de generateur mise a jour, lecteur inchange',async()=>{
  const blob=await builder.build(p,JSON.stringify(p.metadata),JSON.stringify(p.content),ZIP);
  const z=await ZIP.loadAsync(await blob.arrayBuffer());
  const manifest=JSON.parse(await z.file('studio-manifest.json').async('string'));
- assert.equal(manifest.generatorVersion,'0.3.2');
+ assert.equal(manifest.generatorVersion,'0.3.3');
  assert.equal(manifest.runtime.version,'3.8.2');
 });

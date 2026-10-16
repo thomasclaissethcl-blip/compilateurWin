@@ -43,7 +43,7 @@ async function assembleZip(raw,playerDir) {
   'les navigateurs bloquent les requetes JSON necessaires au lecteur H5P.\n'+
   'Pour verifier le rendu avant publication, utiliser la previsualisation integree H5P Studio.\n');
  const manifest=JSON.parse(await z.file('studio-manifest.json').async('string'));
- manifest.generatorVersion='0.3.2';
+ manifest.generatorVersion='0.3.3';
  manifest.runtime.included=true;manifest.runtime.downloadRequired=false;
  manifest.limitations=['Exécution locale testée manuellement selon le contenu','Compatibilité avec Moodle à valider sur votre instance'];
  z.file('studio-manifest.json',JSON.stringify(manifest,null,2));
@@ -66,7 +66,7 @@ async function extractPreview(raw,playerDir,target) {
   }));
  }
  const manifest=JSON.parse(await z.file('studio-manifest.json').async('string'));
- manifest.generatorVersion='0.3.2';manifest.runtime.included=true;manifest.runtime.downloadRequired=false;
+ manifest.generatorVersion='0.3.3';manifest.runtime.included=true;manifest.runtime.downloadRequired=false;
  await fsp.writeFile(path.join(target,'studio-manifest.json'),JSON.stringify(manifest,null,2));
  // Fail before launching a broken preview when critical JSON is missing or HTML.
  for(const rel of ['h5p.json','content/content.json']){
@@ -83,7 +83,12 @@ function startPreviewServer(site,opts={}) {
   if(requestHost!=='127.0.0.1:'+port){res.writeHead(403).end('Hôte refusé');return;}
   if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405).end();return;}
   try {
-   const u=new URL(req.url,'http://127.0.0.1:'+port);
+   // HTTP requests for //h5p.json are still local paths, not protocol-relative URLs.
+   // new URL('//h5p.json', base) would otherwise reinterpret h5p.json as a hostname
+   // and serve index.html instead of the JSON metadata.
+   if(typeof req.url!=='string'||!req.url.startsWith('/')||req.url.startsWith('/\\'))throw Error('Chemin HTTP invalide');
+   const normalizedTarget=req.url.replace(/^\/+/, '/');
+   const u=new URL(normalizedTarget,'http://127.0.0.1:'+port);
    const pathname=decodeURIComponent(u.pathname);
    if(pathname.includes('\\')||pathname.includes('\0')||/[\u0000-\u001f]/.test(pathname))throw Error('Chemin interdit');
    const relative=pathname.replace(/^\/+/, '')||'index.html';

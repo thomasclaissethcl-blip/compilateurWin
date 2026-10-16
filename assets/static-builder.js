@@ -23,24 +23,22 @@
 `Documentation : https://github.com/tunapanda/h5p-standalone\n`;
   const VIEWER_HTML=`<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Prévisualisation H5P</title><link rel="stylesheet" href="viewer/viewer.css"><link rel="stylesheet" href="player/styles/h5p.css">
-</head><body><main><header><h1 id="siteTitle">Activité H5P</h1><div id="playerNote" role="status" aria-live="polite">Initialisation du lecteur…</div></header>
-<div id="h5p-container"></div></main>
+<title>Activité H5P</title><link rel="stylesheet" href="viewer/viewer.css"><link rel="stylesheet" href="player/styles/h5p.css">
+</head><body><main><div id="h5p-container"></div><div id="playerNote" role="alert" hidden></div></main>
 <script src="player/main.bundle.js"></script><script src="viewer/bootstrap.js"></script></body></html>`;
-  const BOOTSTRAP=`(function(){
+  const BOOTSTRAP=String.raw`(function(){
 'use strict';
 const note=document.getElementById('playerNote');
-function status(t,error){note.textContent=t;note.classList.toggle('error',!!error);}
+function status(t,error){note.textContent=error?t:'';note.hidden=!error;}
 const errors=[];
 const nativeFetch=window.fetch.bind(window);
-// Observe requests without changing their results. This pinpoints HTML responses
-// wrongly passed to a JSON parser, including requests made inside Standalone.
+// Observe unexpected HTML responses while retaining native fetch behavior.
 window.fetch=async function(resource,options){
  const response=await nativeFetch(resource,options);
  const url=String(typeof resource==='string'?resource:resource&&resource.url||'');
  const type=response.headers.get('content-type')||'';
- if((/\\.json(?:[?#]|$)/i.test(url) || (/text\\/html/i.test(type) && !/\\.(?:html|htm)(?:[?#]|$)/i.test(url))) &&
-    (!response.ok || /text\\/html/i.test(type))){
+ if((/\.json(?:[?#]|$)/i.test(url) || (/text\/html/i.test(type) && !/\.(?:html|htm)(?:[?#]|$)/i.test(url))) &&
+    (!response.ok || /text\/html/i.test(type))){
   errors.push('URL '+url+' : HTTP '+response.status+', type '+type);
  }
  return response;
@@ -62,24 +60,27 @@ async function getMetadata(){
 }
 async function init(){
  const meta=await getMetadata();
- document.getElementById('siteTitle').textContent=meta.title||'Activité H5P';
+ document.title=meta.title||'Activité H5P';
  if(!window.H5PStandalone||typeof window.H5PStandalone.H5P!=='function')throw Error('Lecteur H5P absent ou incomplet dans player/.');
- // Use root-relative URLs on the preview HTTP server to avoid ambiguous ./ resolution.
+ // Standalone appends /h5p.json and /content.json to the supplied directories.
+ // Strip the trailing slash to prevent //h5p.json on the local HTTP server.
+ const directory=new URL('.',location.href).href.replace(/\/+$/,'');
+ const contentDirectory=new URL('content',location.href).href.replace(/\/+$/,'');
  return new window.H5PStandalone.H5P(document.getElementById('h5p-container'),{
-  h5pJsonPath:new URL('./',location.href).href,contentJsonPath:new URL('content/',location.href).href,
-  librariesPath:new URL('./',location.href).href,
+  h5pJsonPath:directory,contentJsonPath:contentDirectory,
+  librariesPath:directory,
   frameJs:new URL('player/frame.bundle.js',location.href).href,
   frameCss:new URL('player/styles/h5p.css',location.href).href,
   frame:false,export:false,reportingIsEnabled:false,saveFreq:0
  });
 }
-init().then(()=>status('Lecteur initialisé. Vérifiez les interactions et les médias.'))
+init().then(()=>status('',false))
 .catch(e=>{
  console.error(e);const detail=errors.length?' Requêtes suspectes : '+errors.slice(-3).join(' ; '):'';
  status('Prévisualisation impossible : '+(e&&e.message?e.message:String(e))+detail,true);
 });
 })();`;
-  const VIEWER_CSS=`:root{font-family:Segoe UI,Arial,sans-serif;color:#172335;background:#f6f8fb}*{box-sizing:border-box}body{margin:0}main{max-width:1200px;margin:28px auto;padding:0 18px}header{padding:16px 22px;background:#fff;border:1px solid #dbe1eb;border-radius:12px;margin-bottom:18px}h1{font-size:22px;margin:0 0 10px}#playerNote{color:#45617d;font-size:13px}#playerNote.error{color:#aa3131}#h5p-container{background:#fff;border:1px solid #dbe1eb;border-radius:12px;min-height:110px;padding:12px;overflow:visible}`;
+  const VIEWER_CSS=`:root{font-family:Segoe UI,Arial,sans-serif;color:#172335;background:#fff}*{box-sizing:border-box}body{margin:0}main{width:100%;max-width:1200px;margin:0 auto;padding:0}#h5p-container{min-height:80px}#playerNote:not([hidden]){margin:12px;padding:14px;border:1px solid #dba3a3;border-radius:6px;background:#fff6f6;color:#991b1b;font-size:14px;line-height:1.5}#playerNote[hidden]{display:none}`;
   // No -Root argument: %%~dp0 from cmd.exe ends with a backslash, and its closing quote
   // can reach PowerShell as a literal character, breaking Path.GetFullPath().
   // Each PowerShell script derives the package root from $PSScriptRoot.
@@ -180,7 +181,7 @@ try{while($true){
     if(edited.warnings.length)throw Error('Métadonnées modifiées : '+edited.warnings.join(' '));
     return edited;
   }
-  function reportManifest(project, edited){return {format:'h5p-studio-static-preview',generator:'H5P Studio Portable',generatorVersion:'0.3.2',
+  function reportManifest(project, edited){return {format:'h5p-studio-static-preview',generator:'H5P Studio Portable',generatorVersion:'0.3.3',
     runtime:{adapter:'h5p-standalone',version:PLAYER_VERSION,included:false,downloadRequired:true},
     activity:{title:edited.metadata.title,mainLibrary:edited.metadata.mainLibrary,libraryCount:project.libraries.length,dependencyCount:project.dependencyStats.recognized},
     limitations:['Exécution non vérifiée automatiquement','Compatibilité Moodle non testée','Lecteur à installer localement dans player/']};}
