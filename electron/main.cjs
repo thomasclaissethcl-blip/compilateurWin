@@ -5,7 +5,8 @@ const {ensureRuntime,adoptLocalPlayer,PLAYER_VERSION}=require('../runtime/player
 const {extractPreview,exportStaticZip,startPreviewServer}=require('../runtime/studio-site.cjs');
 const {portableRoot:resolvePortableRoot}=require('../runtime/portable-path.cjs');
 const {fullscreenAllowed}=require('../runtime/fullscreen-permission.cjs');
-const APP_VERSION='0.3.4';
+const Registry=require('../runtime/library-registry.cjs');
+const APP_VERSION='0.4.0';
 // On packaged folder builds, __dirname belongs to resources/app.asar (read only).
 // Data must live next to the real executable, never inside app.asar.
 const portableRoot=resolvePortableRoot({portableDir:process.env.PORTABLE_EXECUTABLE_DIR,
@@ -28,6 +29,7 @@ let mainWindow=null, preview=null, workdir=null, playerPromise=null, lastExport=
 const cacheDir=path.join(dataRoot,'data','runtime','standalone',PLAYER_VERSION);
 const bundledDir=app.isPackaged?path.join(process.resourcesPath,'reader',PLAYER_VERSION):path.join(portableRoot,'runtime-bundled',PLAYER_VERSION);
 const exportsDir=path.join(dataRoot,'exports');
+const libraryDir=path.join(dataRoot,'data','libraries');
 function player(){
  if(!playerPromise){playerPromise=ensureRuntime({cacheDir,bundledDir}).catch(e=>{playerPromise=null;throw e;});}
  return playerPromise;
@@ -45,6 +47,30 @@ async function closePreview(){
  if(workdir){await fsp.rm(workdir,{recursive:true,force:true}).catch(()=>{});workdir=null;}
 }
 ipcMain.handle('desktop:status',async e=>{checkCaller(e);return {version:APP_VERSION,playerVersion:PLAYER_VERSION,portableRoot};});
+// The registry is intentionally separate from the H5P player/editor. Merely
+// importing or selecting a version never runs its JavaScript or rewrites content.
+ipcMain.handle('registry:list',async e=>{checkCaller(e);return Registry.listLibraries(libraryDir);});
+ipcMain.handle('registry:fingerprint',async(e,bytes)=>{checkCaller(e);return Registry.fingerprint(await prepareBytes(bytes));});
+ipcMain.handle('registry:import-open',async(e,bytes,originalName)=>{
+ checkCaller(e);const input=await prepareBytes(bytes);
+ return {...await Registry.extractLibraries(input,libraryDir,{sourceName:originalName,origin:'archive-h5p'}),projectId:Registry.fingerprint(input)};
+});
+ipcMain.handle('registry:import-local',async e=>{
+ checkCaller(e);
+ const answer=await dialog.showOpenDialog(mainWindow,{title:'Installer des bibliothèques H5P depuis une archive locale',properties:['openFile'],filters:[{name:'Paquets H5P ou ZIP',extensions:['h5p','zip']}]});
+ if(answer.canceled||!answer.filePaths.length)return {cancelled:true};
+ const file=answer.filePaths[0],stat=await fsp.stat(file);
+ if(!stat.isFile()||!stat.size||stat.size>250*1024*1024)throw Error('Fichier trop volumineux ou inaccessible.');
+ return Registry.extractLibraries(await fsp.readFile(file),libraryDir,{sourceName:path.basename(file),origin:'local'});
+});
+ipcMain.handle('registry:choices',async(e,projectId)=>{
+ checkCaller(e);if(!/^[a-f0-9]{64}$/.test(projectId||''))throw Error('Identifiant de projet invalide.');
+ return (await Registry.readChoices(libraryDir))[projectId]||{};
+});
+ipcMain.handle('registry:select',async(e,projectId,machineName,variantId)=>{
+ checkCaller(e);return Registry.setChoice(libraryDir,projectId,machineName,variantId);
+});
+
 ipcMain.handle('desktop:import-player',async e=>{
  checkCaller(e);const selected=await dialog.showOpenDialog(mainWindow,{title:'Sélectionner le dossier player du lecteur H5P',properties:['openDirectory']});
  if(selected.canceled||!selected.filePaths.length)return {cancelled:true};
@@ -89,7 +115,7 @@ ipcMain.handle('desktop:reveal-export',async(e)=>{
 });
 function createWindow(){
  mainWindow=new BrowserWindow({
-  title:'H5P Studio Portable 0.3.4',width:1400,height:930,minWidth:920,minHeight:650,
+  title:'H5P Studio Portable 0.4.0',width:1400,height:930,minWidth:920,minHeight:650,
   backgroundColor:'#f5f7fa',show:true,
   webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,
    preload:path.join(__dirname,'preload.cjs')}

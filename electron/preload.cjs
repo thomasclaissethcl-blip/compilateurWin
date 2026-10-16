@@ -7,6 +7,12 @@ if(process.isMainFrame){
   preview:bytes=>ipcRenderer.invoke('desktop:preview',bytes),
   export:(bytes,title)=>ipcRenderer.invoke('desktop:export',bytes,title),
   importPlayer:()=>ipcRenderer.invoke('desktop:import-player'),
-  revealExport:()=>ipcRenderer.invoke('desktop:reveal-export')
+  revealExport:()=>ipcRenderer.invoke('desktop:reveal-export'),
+  registryList:()=>ipcRenderer.invoke('registry:list'),
+  registryFingerprint:bytes=>ipcRenderer.invoke('registry:fingerprint',bytes),
+  registryImportOpen:(bytes,name)=>ipcRenderer.invoke('registry:import-open',bytes,name),
+  registryImportLocal:()=>ipcRenderer.invoke('registry:import-local'),
+  registryChoices:id=>ipcRenderer.invoke('registry:choices',id),
+  registrySelect:(id,name,variant)=>ipcRenderer.invoke('registry:select',id,name,variant)
  }));
 }

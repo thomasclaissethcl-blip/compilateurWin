@@ -1,49 +1,23 @@
 # Feuille de route H5P Studio Portable
 
-## Jalon 1 : importation et intégrité, version 0.1.3, validé sur un cas réel
+## Validations réalisées sur Windows 11
 
-Lecture des archives, diagnostic statique des dépendances, inventaire et réexport `.h5p` avec modification JSON. Test utilisateur sur Branching Scenario : 2 648 entrées ZIP, 72 bibliothèques, 22 dépendances reconnues, puis réimportation fonctionnelle dans Lumi.
+- Version 0.1.3 : diagnostic statique et réexport d'un Branching Scenario réel (72 bibliothèques et 22 dépendances).
+- Version 0.3.3 : prévisualisation intégrée et export HTML multifichier testés par l'utilisateur dans Moodle.
+- Version 0.3.4 : plein écran de Branching Scenario validé par l'utilisateur ; distribution DOSSIER retenue.
 
-## Jalon 2A : prévisualisation statique préparatoire, version 0.2.1, prototype expérimental (correctif Windows)
+## Version 0.4.0 : premier registre local multiversion
 
-Livré : conversion ZIP vers arborescence HTML, préservation des bibliothèques et médias, injection d'une page de lecture et serveur de test local Windows. Le lecteur H5P Standalone doit être fourni séparément. Les scripts Windows et la lecture interactive réelle doivent être testés sur Windows 11. L'application principale ne prévisualise pas encore directement dans son interface.
+- Importer des bibliothèques depuis une archive H5P ouverte ou un fichier H5P/ZIP local.
+- Inventorier les versions et variantes avec hash, provenance et exigences API/dépendances.
+- Préserver les versions installées et enregistrer une préférence par empreinte de projet.
+- Ne pas exécuter le code des bibliothèques pendant leur importation.
+- **Non réalisé** : mise à jour du cœur et des bibliothèques depuis les sites officiels / tiers, application de la sélection et migrations, éditeur visuel.
 
-## Jalon 2B : intégration native, version 0.3.0, code disponible et tests de composants réalisés
+## Prochains jalons
 
-- Implémenté dans le code Electron : lancement transparent du serveur HTTP local, prévisualisation intégrée dans une iframe isolée et export ZIP multifichier avec lecteur inclus.
-- Préparation du lecteur dès la compilation, contrôlée par SHA-512 npm ; version de lecteur épinglée et séparation de l'adaptateur.
-- Contrôle automatique des archives et de la sortie ; aucun script Windows exporté dans le ZIP final.
-- **Reste à confirmer sur Windows 11** : compilation, démarrage réel de l'interface, interactions et médias du Branching Scenario de référence, puis validation Moodle.
-
-## Jalon 3 : édition visuelle H5P et création d'activités
-
-- Évaluer les composants maintenus de `@lumieducation/h5p-server` et `@lumieducation/h5p-express`, avec serveur local.
-- Récupérer le cœur et l'éditeur H5P avec empreintes, licences et versions explicites.
-- Intégrer les formulaires et l'édition des `semantics.json` des bibliothèques.
-- Tester le cycle complet créer, ouvrir, modifier, prévisualiser, exporter puis réimporter.
-
-## Jalon 4 : gestionnaire de versions H5P
-
-- Gérer indépendamment les versions du cœur, de l'éditeur, du lecteur et des bibliothèques.
-- Installation explicite, multi-version, validation des dépendances et migrations contrôlées.
-- Historique, provenance, empreintes et retour arrière.
-- Matrice de tests automatiques et validation des nouvelles versions avant activation.
-
-## Jalon 5 : packaging Windows et export multimodule
-
-- Export statique multimodule, mutualisation des bibliothèques et adaptation Moodle `pluginfile.php`.
-- Vérification en compte étudiant sur Moodle, sans H5P Moodle et sans remontée de scores.
-- Compilation Electron portable Windows 11, stockage voisin de l'exécutable, sauvegardes et sécurité.
-
-## Contrat d'adaptateur à stabiliser
-
-```ts
-interface IRuntimeAdapter {
-  id: string;
-  version: string;
-  inspectSupport(archiveManifest: unknown): Promise<{supported: boolean; reasons: string[]}>;
-  buildStaticSite(inputs: {packagePaths: string[]; outputDirectory: string}): Promise<{manifestPath: string; warnings: string[]}>;
-}
-```
-
-Ce contrat est une proposition architecturale, non une API déjà opérationnelle.
+1. Résolution des conflits et des dépendances (directes, dynamiques et transitives) des bibliothèques choisies, avec signalement des écarts de l'API cœur.
+2. Choix d'un profil de cœur/lecteur/éditeur testé ou expérimental, installation de versions depuis des sources vérifiables ; aucun remplacement implicite.
+3. Intégration de l'éditeur visuel H5P, création et modification de contenus.
+4. Migrations explicites avec sauvegarde et restauration, puis activation contrôlée des versions choisies.
+5. Tests de sécurité des dépendances npm, compilation reproductible, export HTML multimodule et optimisation des performances.

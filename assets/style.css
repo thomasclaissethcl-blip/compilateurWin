@@ -37,3 +37,11 @@ button.secondary:hover{background:#f3f7fd}button:disabled{cursor:default;opacity
 .preview-container{margin-top:16px;border:1px solid #d6dde8;border-radius:10px;overflow:hidden;background:white;min-height:600px}
 .preview-container iframe{display:block;width:100%;min-height:740px;height:min(75vh,1100px);border:0;background:white}
 .player-fallback{margin-top:16px;padding:14px;background:#fff4e4;border:1px solid #f2c88a;border-radius:8px}
+
+/* Local multi-version registry */
+.registry-summary{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:22px}
+.panel-inline{margin-top:20px;padding:18px;border:1px solid #e1e5ec;border-radius:10px;background:#fbfcfe}
+.panel-inline h3{font-size:15px;margin:0 0 9px}
+.field{font-size:12px;color:#40526b;font-weight:700}
+.field select{margin-top:7px;min-width:190px;max-width:370px;width:100%;padding:10px;border:1px solid #cad7e6;border-radius:8px;background:white;color:#24354a}
+@media(max-width:850px){.registry-summary{grid-template-columns:1fr}}

@@ -6,6 +6,7 @@
   let active = 'contenu';
   let dirty = false;
   let lastValidated = false;
+  let importBytes=null,projectId=null,registryRows=[],registryChoices={};
   function text(id, value) { $(id).textContent = value; }
   function showAlert(message, kind='info') {
     const box = $('message'); box.textContent = message; box.dataset.kind = kind; box.hidden = false;
@@ -72,7 +73,12 @@
     try {
       const bytes = await file.arrayBuffer();
       const obj = await H5PArchive.openArchive(bytes,window.JSZip);
-      project=obj; filename=file.name;
+      project=obj; filename=file.name;importBytes=new Uint8Array(bytes);
+      try {
+        if(window.crypto?.subtle){const sha=await window.crypto.subtle.digest('SHA-256',bytes);projectId=[...new Uint8Array(sha)].map(x=>x.toString(16).padStart(2,'0')).join('');}
+        else if(window.studioDesktop?.registryFingerprint)projectId=await window.studioDesktop.registryFingerprint(importBytes);
+        else projectId=null;
+      }catch{projectId=null;}
       $('metadataJson').value=JSON.stringify(obj.metadata,null,2);
       $('contentJson').value=JSON.stringify(obj.content,null,2);
       text('currentFilename',file.name);
@@ -84,6 +90,8 @@
       text('appStatus', 'Archive ouverte. Édition JSON disponible.');
       $('workspace').hidden=false; $('emptyState').hidden=true; $('previewTab').disabled=false; $('shortcutStatic').disabled=false;
       librariesTable(obj.libraries); updateReport(); setTab('contenu');
+      $('registryFromCurrentBtn').disabled=!window.studioDesktop?.isDesktop;
+      await refreshRegistry();
       dirty=false; lastValidated=false;
       text('changeStatus','Aucune modification exportée'); $('changeStatus').className='';
       if (obj.warnings.length) showAlert(`${obj.warnings.length} avertissement(s) détecté(s). Consultez l’onglet Diagnostic.`, 'warning');
@@ -114,6 +122,101 @@
     finally {loading(false);}
   }
 
+  // Registry preferences are stored separately. A selected version NEVER
+  // rewrites library.json, upgrades H5P content or changes HTML export in V0.4.0.
+  function registryStatus(msg) { text('registryStatus',msg); }
+  function option(select,value,label) {
+    const el=document.createElement('option');el.value=value;el.textContent=label;select.append(el);
+  }
+  function registryVersions(){
+    const name=$('registryLibrarySelect').value;
+    const select=$('registryVersionSelect');select.replaceChildren();
+    const rows=registryRows.filter(l=>l.machineName===name);
+    if(!rows.length)option(select,'','Aucune version installée');
+    else for(const l of rows){
+      option(select,l.id,`${l.majorVersion}.${l.minorVersion}.${l.patchVersion} | ${l.origin} | ${l.sha256.slice(0,8)}`);
+    }
+    if(registryChoices[name] && rows.some(x=>x.id===registryChoices[name]))select.value=registryChoices[name];
+    $('registrySelectBtn').disabled=!projectId||!rows.length;
+    registryChoiceMessage();
+  }
+  function registryChoiceMessage(){
+    const name=$('registryLibrarySelect').value;
+    if(!project){text('registryChoiceStatus','Ouvrez un H5P pour associer une préférence à son empreinte SHA-256.');return;}
+    if(!projectId){text('registryChoiceStatus','Empreinte de projet indisponible. Aucun choix ne peut être enregistré.');return;}
+    text('registryChoiceStatus',registryChoices[name]
+      ? 'Préférence enregistrée pour ce projet. Non appliquée à l’édition, à la prévisualisation ni aux exports.'
+      : 'Aucune préférence enregistrée. Le contenu H5P conserve ses propres bibliothèques.');
+  }
+  function registryRender(){
+    const table=$('registryTable');table.replaceChildren();
+    text('registryCount',String(registryRows.length));
+    const names=[...new Set(registryRows.map(x=>x.machineName))].sort();
+    text('registryNames',String(names.length));
+    if(!registryRows.length){
+      const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=5;td.textContent='Registre vide : importez un paquet H5P ou les bibliothèques de votre activité.';tr.append(td);table.append(tr);
+    }
+    for(const lib of registryRows){
+      const tr=document.createElement('tr');
+      const cells=[lib.machineName,`${lib.majorVersion}.${lib.minorVersion}.${lib.patchVersion}`,
+        `${lib.origin} : ${lib.sourceName}`,
+        lib.coreApi?`${lib.coreApi.majorVersion}.${lib.coreApi.minorVersion}`:'Non précisée',
+        lib.sha256.slice(0,12)];
+      cells.forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.append(td);});table.append(tr);
+    }
+    const select=$('registryLibrarySelect'),old=select.value;select.replaceChildren();
+    const projectNames=project?project.libraries.map(x=>x.machineName):[];
+    const all=[...new Set([...projectNames,...names])].sort();
+    if(!all.length)option(select,'','Aucune bibliothèque');
+    else all.forEach(x=>option(select,x,x));
+    if(all.includes(old))select.value=old;
+    else if(project?.metadata?.mainLibrary && all.includes(project.metadata.mainLibrary))select.value=project.metadata.mainLibrary;
+    registryVersions();
+  }
+  async function refreshRegistry(){
+    if(!window.studioDesktop?.registryList){registryStatus('Le registre nécessite l’application Windows compilée.');return;}
+    try{
+      registryRows=await window.studioDesktop.registryList();
+      registryChoices=projectId?await window.studioDesktop.registryChoices(projectId):{};
+      registryRender();registryStatus(`${registryRows.length} variante(s) dans le registre local. Aucune mise à jour automatique.`);
+    }catch(e){registryStatus('Échec de lecture du registre : '+(e.message||e));}
+  }
+  async function importCurrentLibraries(){
+    if(!project||!importBytes)return;
+    if(!confirm('Installer les bibliothèques de cette archive dans le registre local ? Elles peuvent inclure du code JavaScript de tiers. Aucune bibliothèque ne sera exécutée pendant l’import.'))return;
+    $('registryFromCurrentBtn').disabled=true;
+    registryStatus('Analyse et copie des bibliothèques en cours…');
+    try{
+      const result=await window.studioDesktop.registryImportOpen(importBytes,filename);
+      registryStatus(`Bibliothèques trouvées : ${result.totalFound}. Nouvelles : ${result.installed.length}. Déjà présentes : ${result.skipped.length}. Erreurs : ${result.errors.length}.`);
+      await refreshRegistry();
+      if(result.errors.length)showAlert('Certaines bibliothèques n’ont pas été enregistrées : '+result.errors.slice(0,3).map(x=>x.library+' : '+x.reason).join(' ; '),'warning');
+      else showAlert('Bibliothèques ajoutées au registre sans modifier le H5P ouvert.','success');
+      setTab('registry');
+    }catch(e){registryStatus('Import impossible : '+(e.message||e));showAlert(e.message||String(e),'error');}
+    finally{$('registryFromCurrentBtn').disabled=false;}
+  }
+  async function importLocalLibraries(){
+    if(!window.studioDesktop?.registryImportLocal)return;
+    if(!confirm('Importer des bibliothèques provenant d’un paquet local ? Leur code pourra être exécuté ultérieurement par un lecteur H5P. N’utilisez que des sources fiables.'))return;
+    try{
+      registryStatus('Analyse du paquet sélectionné…');
+      const result=await window.studioDesktop.registryImportLocal();
+      if(result.cancelled){registryStatus('Import annulé.');return;}
+      await refreshRegistry();
+      registryStatus(`Bibliothèques trouvées : ${result.totalFound}, nouvelles : ${result.installed.length}, déjà présentes : ${result.skipped.length}, erreurs : ${result.errors.length}.`);
+      if(result.errors.length)showAlert(result.errors.slice(0,3).map(x=>x.library+' : '+x.reason).join(' ; '),'warning');
+    }catch(e){registryStatus('Import impossible : '+(e.message||e));showAlert(e.message||String(e),'error');}
+  }
+  async function storeChoice(){
+    if(!projectId)return;
+    try{
+      const name=$('registryLibrarySelect').value,variant=$('registryVersionSelect').value;
+      await window.studioDesktop.registrySelect(projectId,name,variant);
+      registryChoices[name]=variant;registryChoiceMessage();
+      showAlert('Préférence enregistrée pour ce projet. Les fichiers de l’activité ne sont pas modifiés.','success');
+    }catch(e){showAlert(e.message||String(e),'error');}
+  }
   function canPreview() {
     if (!project) return false;
     if (project.dependencyStatus !== 'complet' || project.missing.length) {
@@ -178,6 +281,11 @@
     dirty=false; text('changeStatus','Modifications réinitialisées'); $('changeStatus').className='';
     clearAlert();
   }
+  $('registryFromCurrentBtn').addEventListener('click',importCurrentLibraries);
+  $('registryFromFileBtn').addEventListener('click',importLocalLibraries);
+  $('refreshRegistryBtn').addEventListener('click',refreshRegistry);
+  $('registryLibrarySelect').addEventListener('change',registryVersions);
+  $('registrySelectBtn').addEventListener('click',storeChoice);
   $('importBtn').addEventListener('click',()=> $('fileInput').click());
   $('fileInput').addEventListener('change',e=>importFile(e.target.files[0]));
   $('saveBtn').addEventListener('click',exportH5P);
@@ -206,5 +314,5 @@
   text('runtimeVersion','Standalone '+H5PStaticBuilder.PLAYER_VERSION+' (lecteur géré par Electron ; compatibilité à valider)');
   $('desktopFallback').hidden=Boolean(window.studioDesktop?.isDesktop);
   if(!window.studioDesktop?.isDesktop){$('viewBtn').disabled=true;$('staticBtn').disabled=true;}
-  else window.studioDesktop.info().catch(()=>{});
+  else {window.studioDesktop.info().catch(()=>{});refreshRegistry();}
 })();

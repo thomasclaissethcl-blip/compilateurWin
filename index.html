@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
- <title>H5P Studio Portable | Version 0.3.2</title>
+ <title>H5P Studio Portable | Version 0.4.0</title>
  <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -22,12 +22,12 @@
       <button disabled title="L’intégration de l’éditeur visuel officiel reste un jalon ultérieur">Éditeur visuel H5P (à venir)</button>
       <button data-tab="preview" id="previewTab" disabled title="Importez un H5P pour le prévisualiser dans l’application">Prévisualisation intégrée</button>
       <button id="shortcutStatic" disabled title="Importez un H5P pour produire un ZIP HTML autonome">Export HTML multifichier</button>
-      <button disabled title="Gestionnaire de mises à jour : à développer">Mises à jour H5P (à venir)</button>
+      <button data-tab="registry" id="registryTab">Registre multiversion</button>
    </nav>
-   <div class="side-foot">Version 0.3.4<br>Moteur embarqué lors de la compilation. Aucun installateur nécessaire.</div>
+   <div class="side-foot">Version 0.4.0<br>Moteur embarqué lors de la compilation. Aucun installateur nécessaire.</div>
  </aside>
  <main class="main">
-   <div class="head"><div><h1>Atelier d'archives H5P</h1><p class="subtitle">Importer, inspecter, prévisualiser et exporter sans manipuler de scripts.</p></div><div class="version">V0.3.2 développement</div></div>
+   <div class="head"><div><h1>Atelier d'archives H5P</h1><p class="subtitle">Importer, inspecter, prévisualiser et exporter sans manipuler de scripts.</p></div><div class="version">V0.4.0 expérimental</div></div>
    <div class="notice" id="message" role="status" aria-live="polite" hidden></div>
    <section class="panel" id="dropZone">
       <div class="drop"><div class="symbol" aria-hidden="true">&#8682;</div><h2>Ouvrir une activité .h5p</h2>
@@ -86,6 +86,32 @@
         <div class="status-line"><span id="appStatus">Prêt</span><span id="changeStatus"></span></div>
       </section>
    </div>
+      <section class="panel" data-panel="registry" hidden>
+        <div class="sectionhead"><div><h2>Bibliothèques H5P installées</h2><span class="filehint">Registre portable local</span></div>
+          <button class="secondary" type="button" id="refreshRegistryBtn">Actualiser</button></div>
+        <p class="info">Cette première version installe et inventorie plusieurs versions, y compris des bibliothèques de développeurs tiers. Elle n'applique pas encore les changements de version aux activités : une migration et la vérification des dépendances seront nécessaires.</p>
+        <div class="btns">
+          <button class="primary" type="button" id="registryFromCurrentBtn" disabled>Enregistrer les bibliothèques du H5P ouvert</button>
+          <button class="secondary" type="button" id="registryFromFileBtn">Importer un paquet local .h5p ou .zip</button>
+        </div>
+        <p class="muted" id="registryStatus" role="status" aria-live="polite">Registre local : aucune analyse exécutée.</p>
+        <div class="summary registry-summary">
+          <div class="stat"><label>Variantes installées</label><div class="value" id="registryCount">0</div></div>
+          <div class="stat"><label>Types distincts</label><div class="value" id="registryNames">0</div></div>
+          <div class="stat"><label>Moteur embarqué</label><div class="value">Standalone 3.8.2</div><p class="muted">API cœur exacte non vérifiée</p></div>
+        </div>
+        <div style="overflow:auto"><table class="data-table"><thead><tr><th>Bibliothèque</th><th>Version</th><th>Origine</th><th>API requise</th><th>Identifiant</th></tr></thead><tbody id="registryTable"></tbody></table></div>
+        <div class="registry-choice panel-inline">
+          <h3>Choix de version pour l'activité ouverte</h3>
+          <p class="muted">Enregistré pour le fichier H5P original. Ce choix est une préférence de projet : il n'altère ni le fichier H5P, ni la prévisualisation, ni l'export pour le moment.</p>
+          <div class="btns">
+            <label class="field">Bibliothèque<br><select id="registryLibrarySelect"></select></label>
+            <label class="field">Version installée<br><select id="registryVersionSelect"></select></label>
+            <button class="secondary" id="registrySelectBtn" type="button" disabled>Enregistrer ce choix</button>
+          </div>
+          <p class="muted" id="registryChoiceStatus">Importez une activité et installez au moins une bibliothèque pour effectuer un choix.</p>
+        </div>
+      </section>
    <p class="muted">Moteur d’exécution : <span id="runtimeVersion">Standalone 3.8.2 (profil de compatibilité à vérifier)</span>. Éditeur visuel encore à intégrer ; compatibilité Moodle à vérifier.</p>
  </main>
 </div>
