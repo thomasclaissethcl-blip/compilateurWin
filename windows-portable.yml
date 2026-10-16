@@ -1,0 +1,30 @@
+name: Compiler le portable Windows
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'electron/**'
+      - 'runtime/**'
+      - 'assets/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'index.html'
+      - '.github/workflows/windows-portable.yml'
+jobs:
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npm run build:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: H5P-Studio-Portable-0.3.0-Windows
+          path: dist/*.exe
+          if-no-files-found: error

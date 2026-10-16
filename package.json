@@ -1,0 +1,54 @@
+{
+  "name": "h5p-studio-portable",
+  "productName": "H5P Studio Portable",
+  "version": "0.3.0",
+  "description": "Portable Windows H5P studio: diagnostics, integrated preview and standalone HTML export",
+  "private": true,
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.cjs",
+    "prepare:player": "node scripts/fetch-player.cjs",
+    "build:win": "npm run prepare:player && electron-builder --win portable --x64"
+  },
+  "devDependencies": {
+    "electron": "44.8.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "local.h5pstudio.portable",
+    "productName": "H5P Studio Portable",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "assets/**",
+      "electron/**",
+      "runtime/**",
+      "package.json",
+      "!**/*.md"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "H5P-Studio-Portable-0.3.0-${arch}.${ext}"
+    },
+    "portable": {
+      "requestExecutionLevel": "user"
+    },
+    "extraResources": [
+      {
+        "from": "runtime-bundled/3.8.2",
+        "to": "reader/3.8.2"
+      }
+    ]
+  }
+}
