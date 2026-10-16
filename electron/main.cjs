@@ -3,16 +3,30 @@ const {app,BrowserWindow,ipcMain,dialog,session,shell}=require('electron');
 const fs=require('node:fs');const fsp=fs.promises;const path=require('node:path');const os=require('node:os');const crypto=require('node:crypto');
 const {ensureRuntime,adoptLocalPlayer,PLAYER_VERSION}=require('../runtime/player-manager.cjs');
 const {extractPreview,exportStaticZip,startPreviewServer}=require('../runtime/studio-site.cjs');
-const APP_VERSION='0.3.1';
-const portableRoot=process.env.PORTABLE_EXECUTABLE_DIR || path.resolve(__dirname,'..');
-const profilePath=path.join(portableRoot,'data','electron-profile');
-try{fs.mkdirSync(profilePath,{recursive:true});app.setPath('userData',profilePath)}
-catch(e){console.error('Profil portable indisponible : '+e.message)}
+const {portableRoot:resolvePortableRoot}=require('../runtime/portable-path.cjs');
+const APP_VERSION='0.3.2';
+// On packaged folder builds, __dirname belongs to resources/app.asar (read only).
+// Data must live next to the real executable, never inside app.asar.
+const portableRoot=resolvePortableRoot({portableDir:process.env.PORTABLE_EXECUTABLE_DIR,
+  packaged:app.isPackaged,exePath:process.execPath,sourceDir:__dirname});
+const requestedProfile=path.join(portableRoot,'data','electron-profile');
+let dataRoot=portableRoot;
+try{
+ fs.mkdirSync(requestedProfile,{recursive:true});
+ fs.accessSync(requestedProfile,fs.constants.W_OK);
+ app.setPath('userData',requestedProfile);
+}catch(e){
+ // Read-only removable media or Windows directory: preserve a functioning application.
+ // Explicitly identify the fallback, so users do not assume their data is portable.
+ dataRoot=path.join(app.getPath('userData'),'H5P-Studio-Data');
+ fs.mkdirSync(dataRoot,{recursive:true});
+ console.warn('Données portables indisponibles ; repli dans le profil utilisateur : '+e.message);
+}
 app.setAppUserModelId('local.h5pstudio.portable');
 let mainWindow=null, preview=null, workdir=null, playerPromise=null, lastExport=null;
-const cacheDir=path.join(portableRoot,'data','runtime','standalone',PLAYER_VERSION);
+const cacheDir=path.join(dataRoot,'data','runtime','standalone',PLAYER_VERSION);
 const bundledDir=app.isPackaged?path.join(process.resourcesPath,'reader',PLAYER_VERSION):path.join(portableRoot,'runtime-bundled',PLAYER_VERSION);
-const exportsDir=path.join(portableRoot,'exports');
+const exportsDir=path.join(dataRoot,'exports');
 function player(){
  if(!playerPromise){playerPromise=ensureRuntime({cacheDir,bundledDir}).catch(e=>{playerPromise=null;throw e;});}
  return playerPromise;
@@ -74,14 +88,19 @@ ipcMain.handle('desktop:reveal-export',async(e)=>{
 });
 function createWindow(){
  mainWindow=new BrowserWindow({
-  title:'H5P Studio Portable 0.3.1',width:1400,height:930,minWidth:920,minHeight:650,
-  backgroundColor:'#f5f7fa',show:false,
+  title:'H5P Studio Portable 0.3.2',width:1400,height:930,minWidth:920,minHeight:650,
+  backgroundColor:'#f5f7fa',show:true,
   webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,
    preload:path.join(__dirname,'preload.cjs')}
  });
  mainWindow.removeMenu();
- mainWindow.loadFile(path.join(__dirname,'..','index.html'));
- mainWindow.once('ready-to-show',()=>mainWindow.show());
+ mainWindow.loadFile(path.join(__dirname,'..','index.html')).catch(err=>{
+  console.error('Impossible de charger l’interface',err);
+  dialog.showErrorBox('H5P Studio : interface non chargée',String(err.message||err));
+ });
+ mainWindow.webContents.on('render-process-gone',(_event,details)=>{
+  console.error('Processus de rendu interrompu :',details.reason);
+ });
  mainWindow.webContents.setWindowOpenHandler(()=>({action:'deny'}));
  mainWindow.webContents.on('will-navigate',e=>e.preventDefault());
  mainWindow.webContents.on('will-attach-webview',e=>e.preventDefault());
@@ -97,6 +116,6 @@ app.whenReady().then(async()=>{
  });
  createWindow();
  app.on('activate',()=>{if(BrowserWindow.getAllWindows().length===0)createWindow();});
-});
+}).catch(e=>{console.error('Démarrage impossible',e);dialog.showErrorBox('H5P Studio : démarrage impossible',String(e.message||e));app.quit();});
 app.on('before-quit',()=>{if(preview)preview.server.close();if(workdir)fsp.rm(workdir,{recursive:true,force:true}).catch(()=>{});});
 app.on('window-all-closed',()=>app.quit());

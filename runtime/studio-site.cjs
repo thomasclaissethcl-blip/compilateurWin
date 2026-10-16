@@ -36,8 +36,14 @@ async function assembleZip(raw,playerDir) {
  await visitFiles(playerDir,async(rel,absolute)=>{
   assertSafeFile(rel);z.file('player/'+rel,await fsp.readFile(absolute));
  });
+ z.file('LIRE-AVANT-OUVERTURE.txt',
+  'SITE H5P STATIQUE\n\nCe ZIP contient un site HTML multifichier.\n'+
+  'Il doit etre publie sur un serveur HTTP(S), notamment via la ressource Fichier de Moodle.\n'+
+  'Ne pas ouvrir index.html directement avec un navigateur depuis un disque (file://) :\n'+
+  'les navigateurs bloquent les requetes JSON necessaires au lecteur H5P.\n'+
+  'Pour verifier le rendu avant publication, utiliser la previsualisation integree H5P Studio.\n');
  const manifest=JSON.parse(await z.file('studio-manifest.json').async('string'));
- manifest.generatorVersion='0.3.1';
+ manifest.generatorVersion='0.3.2';
  manifest.runtime.included=true;manifest.runtime.downloadRequired=false;
  manifest.limitations=['Exécution locale testée manuellement selon le contenu','Compatibilité avec Moodle à valider sur votre instance'];
  z.file('studio-manifest.json',JSON.stringify(manifest,null,2));
@@ -60,8 +66,13 @@ async function extractPreview(raw,playerDir,target) {
   }));
  }
  const manifest=JSON.parse(await z.file('studio-manifest.json').async('string'));
- manifest.generatorVersion='0.3.1';manifest.runtime.included=true;manifest.runtime.downloadRequired=false;
+ manifest.generatorVersion='0.3.2';manifest.runtime.included=true;manifest.runtime.downloadRequired=false;
  await fsp.writeFile(path.join(target,'studio-manifest.json'),JSON.stringify(manifest,null,2));
+ // Fail before launching a broken preview when critical JSON is missing or HTML.
+ for(const rel of ['h5p.json','content/content.json']){
+  const jsonText=await fsp.readFile(path.join(target,rel),'utf8');
+  try{JSON.parse(jsonText)}catch(e){throw Error('JSON invalide dans '+rel+' : '+e.message)}
+ }
  return {folder:target,playerDir};
 }
 const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml','.gif':'image/gif','.webp':'image/webp','.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf','.mp4':'video/mp4','.webm':'video/webm','.mp3':'audio/mpeg','.wav':'audio/wav','.ogg':'audio/ogg','.pdf':'application/pdf','.vtt':'text/vtt'};

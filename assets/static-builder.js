@@ -31,18 +31,53 @@
 'use strict';
 const note=document.getElementById('playerNote');
 function status(t,error){note.textContent=t;note.classList.toggle('error',!!error);}
-window.addEventListener('error',event=>{if(event.filename&&event.filename.includes('/player/'))status('Erreur de chargement du lecteur : '+event.message,true);});
-fetch('./h5p.json').then(r=>{if(!r.ok)throw Error('Impossible de lire h5p.json ('+r.status+')');return r.json()})
-.then(meta=>{
+const errors=[];
+const nativeFetch=window.fetch.bind(window);
+// Observe requests without changing their results. This pinpoints HTML responses
+// wrongly passed to a JSON parser, including requests made inside Standalone.
+window.fetch=async function(resource,options){
+ const response=await nativeFetch(resource,options);
+ const url=String(typeof resource==='string'?resource:resource&&resource.url||'');
+ const type=response.headers.get('content-type')||'';
+ if((/\\.json(?:[?#]|$)/i.test(url) || (/text\\/html/i.test(type) && !/\\.(?:html|htm)(?:[?#]|$)/i.test(url))) &&
+    (!response.ok || /text\\/html/i.test(type))){
+  errors.push('URL '+url+' : HTTP '+response.status+', type '+type);
+ }
+ return response;
+};
+window.addEventListener('error',event=>{
+ if(event.filename&&event.filename.includes('/player/'))status('Erreur de chargement du lecteur : '+event.message,true);
+});
+if(location.protocol==='file:'){
+ status('Ce site multifichier doit être consulté par HTTP(S) (Moodle ou serveur web). L’ouverture directe du fichier index.html est bloquée par les navigateurs.',true);
+ return;
+}
+async function getMetadata(){
+ const url=new URL('h5p.json',location.href);
+ const response=await nativeFetch(url.href,{cache:'no-store'});
+ if(!response.ok)throw Error('h5p.json : HTTP '+response.status+' ('+url.pathname+')');
+ const body=await response.text();
+ if(body.trimStart().startsWith('<'))throw Error('h5p.json a renvoyé du HTML à la place du JSON ('+url.pathname+').');
+ try{return JSON.parse(body);}catch(e){throw Error('h5p.json invalide : '+e.message);}
+}
+async function init(){
+ const meta=await getMetadata();
  document.getElementById('siteTitle').textContent=meta.title||'Activité H5P';
- if(!window.H5PStandalone||typeof window.H5PStandalone.H5P!=='function')throw Error('Lecteur absent : lancez INSTALLER-LECTEUR.cmd avant de prévisualiser.');
+ if(!window.H5PStandalone||typeof window.H5PStandalone.H5P!=='function')throw Error('Lecteur H5P absent ou incomplet dans player/.');
+ // Use root-relative URLs on the preview HTTP server to avoid ambiguous ./ resolution.
  return new window.H5PStandalone.H5P(document.getElementById('h5p-container'),{
-   h5pJsonPath:'./',contentJsonPath:'./content',librariesPath:'./',
-   frameJs:'./player/frame.bundle.js',frameCss:'./player/styles/h5p.css',
-   frame:false,export:false,reportingIsEnabled:false,saveFreq:0
+  h5pJsonPath:new URL('./',location.href).href,contentJsonPath:new URL('content/',location.href).href,
+  librariesPath:new URL('./',location.href).href,
+  frameJs:new URL('player/frame.bundle.js',location.href).href,
+  frameCss:new URL('player/styles/h5p.css',location.href).href,
+  frame:false,export:false,reportingIsEnabled:false,saveFreq:0
  });
-}).then(()=>status('Lecteur initialisé. Vérifiez toutes les interactions et les médias.'))
-.catch(e=>{console.error(e);status('Prévisualisation impossible : '+(e&&e.message?e.message:String(e)),true);});
+}
+init().then(()=>status('Lecteur initialisé. Vérifiez les interactions et les médias.'))
+.catch(e=>{
+ console.error(e);const detail=errors.length?' Requêtes suspectes : '+errors.slice(-3).join(' ; '):'';
+ status('Prévisualisation impossible : '+(e&&e.message?e.message:String(e))+detail,true);
+});
 })();`;
   const VIEWER_CSS=`:root{font-family:Segoe UI,Arial,sans-serif;color:#172335;background:#f6f8fb}*{box-sizing:border-box}body{margin:0}main{max-width:1200px;margin:28px auto;padding:0 18px}header{padding:16px 22px;background:#fff;border:1px solid #dbe1eb;border-radius:12px;margin-bottom:18px}h1{font-size:22px;margin:0 0 10px}#playerNote{color:#45617d;font-size:13px}#playerNote.error{color:#aa3131}#h5p-container{background:#fff;border:1px solid #dbe1eb;border-radius:12px;min-height:110px;padding:12px;overflow:visible}`;
   // No -Root argument: %%~dp0 from cmd.exe ends with a backslash, and its closing quote
@@ -145,7 +180,7 @@ try{while($true){
     if(edited.warnings.length)throw Error('Métadonnées modifiées : '+edited.warnings.join(' '));
     return edited;
   }
-  function reportManifest(project, edited){return {format:'h5p-studio-static-preview',generator:'H5P Studio Portable',generatorVersion:'0.2.1',
+  function reportManifest(project, edited){return {format:'h5p-studio-static-preview',generator:'H5P Studio Portable',generatorVersion:'0.3.2',
     runtime:{adapter:'h5p-standalone',version:PLAYER_VERSION,included:false,downloadRequired:true},
     activity:{title:edited.metadata.title,mainLibrary:edited.metadata.mainLibrary,libraryCount:project.libraries.length,dependencyCount:project.dependencyStats.recognized},
     limitations:['Exécution non vérifiée automatiquement','Compatibilité Moodle non testée','Lecteur à installer localement dans player/']};}
