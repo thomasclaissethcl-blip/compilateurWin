@@ -21,6 +21,7 @@ if(process.isMainFrame){
   catalogAdd:repo=>ipcRenderer.invoke('catalog:add',repo),
   catalogRemove:repo=>ipcRenderer.invoke('catalog:remove',repo),
   catalogCheck:repo=>ipcRenderer.invoke('catalog:check',repo),
-  catalogInstall:(repo,assetId)=>ipcRenderer.invoke('catalog:install',repo,assetId)
+  catalogInstall:(repo,assetId)=>ipcRenderer.invoke('catalog:install',repo,assetId),
+  catalogSnapshot:(repo,sha)=>ipcRenderer.invoke('catalog:source-snapshot',repo,sha)
  }));
 }

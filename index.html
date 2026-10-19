@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
- <title>H5P Studio Portable | Version 0.5.0</title>
+ <title>H5P Studio Portable | Version 0.5.1</title>
  <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -25,10 +25,10 @@
       <button data-tab="registry" id="registryTab">Registre multiversion</button>
       <button data-tab="updates" id="updatesTab">Sources et mises à jour</button>
    </nav>
-   <div class="side-foot">Version 0.5.0<br>Moteur embarqué lors de la compilation. Aucun installateur nécessaire.</div>
+   <div class="side-foot">Version 0.5.1<br>Moteur embarqué lors de la compilation. Aucun installateur nécessaire.</div>
  </aside>
  <main class="main">
-   <div class="head"><div><h1>Atelier d'archives H5P</h1><p class="subtitle">Importer, inspecter, prévisualiser et exporter sans manipuler de scripts.</p></div><div class="version">V0.5.0 expérimental</div></div>
+   <div class="head"><div><h1>Atelier d'archives H5P</h1><p class="subtitle">Importer, inspecter, prévisualiser et exporter sans manipuler de scripts.</p></div><div class="version">V0.5.1 expérimental</div></div>
    <div class="notice" id="message" role="status" aria-live="polite" hidden></div>
    <section class="panel" id="dropZone">
       <div class="drop"><div class="symbol" aria-hidden="true">&#8682;</div><h2>Ouvrir une activité .h5p</h2>
@@ -124,7 +124,7 @@
       </section>
       <section class="panel" data-panel="updates" hidden>
         <div class="sectionhead"><div><h2>Sources et mises à jour H5P</h2><p class="subtitle">Cœur officiel de lecture et d’édition, bibliothèques officielles et dépôts tiers.</p></div><button class="secondary" id="catalogRefreshBtn" type="button">Rafraîchir la liste</button></div>
-        <p class="info">V0.5.0 : détection des releases, tags et derniers commits publics GitHub. Les bibliothèques empaquetées dans les fichiers .h5p/.zip publiés en pièces jointes d’une release peuvent être installées explicitement. Le cœur H5P est suivi mais n’est pas encore remplaçable dans l’application. Les archives de code source brut ne sont pas automatiquement converties en bibliothèques.</p>
+        <p class="info">V0.5.1 : consultation GitHub et conservation des sources exactes par commit SHA. Les bibliothèques dont les ressources compilées sont présentes peuvent être ajoutées au registre. Les sources qui nécessitent une compilation sont conservées, mais ne sont pas installées. Le cœur est téléchargeable en tant que source, sans activation dans le moteur.</p>
         <div class="panel-inline">
           <h3>Ajouter une source de bibliothèque tierce</h3>
           <div class="btns"><input id="catalogRepoInput" type="text" placeholder="propriétaire/dépôt ou URL github.com" aria-label="Dépôt GitHub" maxlength="160" class="catalog-input"><button type="button" class="secondary" id="catalogAddBtn">Suivre ce dépôt</button></div>
@@ -136,8 +136,9 @@
           <h3>Publications et versions observées</h3>
           <pre id="catalogReport" class="report">Sélectionnez « Vérifier » dans la liste des sources.</pre>
           <div id="catalogAssets" class="catalog-assets"></div>
+          <div id="catalogSourceRefs" class="catalog-assets"></div>
         </div>
-        <p class="muted">Les sources externes peuvent exécuter du JavaScript lors de la prévisualisation future. N’installez que des bibliothèques provenant d’auteurs de confiance. L’installation dans le registre ne remplace aucune version existante.</p>
+        <p class="muted">Pour Game Map et son éditeur, un workflow GitHub de compilation optionnel est inclus dans les sources. Les sources externes peuvent exécuter du JavaScript lors de la prévisualisation future. N’installez que des bibliothèques provenant d’auteurs de confiance. L’installation dans le registre ne remplace aucune version existante.</p>
       </section>
    <p class="muted">Moteur d’exécution : <span id="runtimeVersion">Standalone 3.8.2 (profil de compatibilité à vérifier)</span>. Éditeur visuel encore à intégrer ; compatibilité Moodle à vérifier.</p>
  </main>

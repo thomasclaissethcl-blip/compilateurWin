@@ -124,7 +124,7 @@
   }
 
   // Registry preferences are stored separately. A selected version NEVER
-  // rewrites library.json, upgrades H5P content or changes HTML export in V0.5.0.
+  // rewrites library.json, upgrades H5P content or changes HTML export in V0.5.1.
   function registryStatus(msg) { text('registryStatus',msg); }
   function option(select,value,label) {
     const el=document.createElement('option');el.value=value;el.textContent=label;select.append(el);
@@ -361,7 +361,7 @@
     }catch(e){catalogStatus('Impossible de lire les sources : '+(e.message||e));}
   }
   async function checkCatalog(source){
-    $('catalogAssets').replaceChildren();
+    $('catalogAssets').replaceChildren();$('catalogSourceRefs').replaceChildren();
     text('catalogReport','Consultation des publications GitHub…');
     catalogStatus('Vérification de '+source.repo+'…');
     try{
@@ -374,9 +374,10 @@
         'Commit récent sur la branche par défaut : '+(r.latestCommit?.sha||'Indisponible'),
         'Date du commit : '+(r.latestCommit?.date||'Indisponible'),
         'Paquets .h5p/.zip en pièces jointes : '+r.assets.length,
+        'Révisions source utilisables : '+(r.tagRefs?.length||0)+' tag(s), '+(r.latestCommit?.sha?'commit récent':'aucun'),
         ...(r.errors.length?['Limites de consultation : '+r.errors.join(' ; ')]:[]),
         '',
-        source.kind==='library'?'Un paquet téléchargé sera installé dans le registre, sans changer l’activité.':'Le cœur est suivi mais ne peut pas encore être remplacé automatiquement dans ce prototype.'
+        source.kind==='library'?'Les bibliothèques compilées peuvent être importées. Une révision de code source non compilée est conservée sans installation.':'La révision du cœur peut être conservée localement, sans changer le moteur actif ni la version de son API.'
       ];
       text('catalogReport',lines.join('\n'));
       const assets=$('catalogAssets');assets.replaceChildren();
@@ -401,6 +402,30 @@
           el.append(description,button);assets.append(el);
         }
         if(!r.assets.length){const hint=document.createElement('p');hint.className='muted';hint.textContent='Aucun fichier .h5p/.zip empaqueté en pièce jointe des releases consultées. Import local ou compilation du projet source nécessaire.';assets.append(hint);}
+      }
+      const sourceRefs=$('catalogSourceRefs');
+      const uniqueRefs=new Map();
+      if(r.latestCommit?.sha)uniqueRefs.set(r.latestCommit.sha,{sha:r.latestCommit.sha,label:'Dernier commit : '+r.latestCommit.sha.slice(0,12)});
+      for(const t of r.tagRefs||[])if(!uniqueRefs.has(t.sha))uniqueRefs.set(t.sha,{sha:t.sha,label:'Tag '+t.tag+' : '+t.sha.slice(0,12)});
+      if(uniqueRefs.size){
+        const heading=document.createElement('h3');heading.textContent='Révisions exactes du code source';sourceRefs.append(heading);
+        const intro=document.createElement('p');intro.className='muted';intro.textContent='Télécharger le code source à une révision précise. Une bibliothèque non compilée sera conservée sans être activée. Les sources du cœur ne modifient jamais le moteur actif.';sourceRefs.append(intro);
+      }
+      for(const ref of uniqueRefs.values()){
+        const row=document.createElement('div');row.className='asset';
+        const description=document.createElement('span');description.textContent=ref.label;
+        const button=document.createElement('button');button.className='secondary';button.type='button';button.textContent='Examiner cette révision';
+        button.addEventListener('click',async()=>{
+          if(!confirm('Télécharger le code source '+source.repo+' à '+ref.sha.slice(0,12)+' ? Aucun code téléchargé ne sera exécuté. Une bibliothèque déjà compilée peut être ajoutée au registre.'))return;
+          button.disabled=true;catalogStatus('Téléchargement du code à la révision '+ref.sha.slice(0,12)+'…');
+          try{
+            const res=await window.studioDesktop.catalogSnapshot(source.repo,ref.sha);
+            const info=[`Révision ${ref.sha.slice(0,12)} : ${res.kind}.`,res.reason||'',`Source conservée dans data/source-snapshots. Empreinte ZIP SHA-256 : ${res.snapshot.sha256}.`,res.installed?'Bibliothèque prête ajoutée au registre.':'Aucune activation du cœur ni des bibliothèques.'].filter(Boolean).join(' ');
+            catalogStatus(info);
+            if(res.installed){lastImportLoaded=false;await refreshRegistry();}
+          }catch(e){catalogStatus('Récupération des sources impossible : '+(e.message||e));}
+          finally{button.disabled=false;}
+        });row.append(description,button);sourceRefs.append(row);
       }
       catalogStatus('Consultation terminée : '+r.repo+'.');
     }catch(e){text('catalogReport','Consultation impossible : '+(e.message||e));catalogStatus('Échec de consultation : '+source.repo);}

@@ -10,7 +10,8 @@ const {assess}=require('../runtime/dependency-resolver.cjs');
 const {evidence}=require('../runtime/core-evidence.cjs');
 const UpdateSources=require('../runtime/update-sources.cjs');
 const Catalog=require('../runtime/github-catalog.cjs');
-const APP_VERSION='0.5.0';
+const Snapshots=require('../runtime/source-snapshots.cjs');
+const APP_VERSION='0.5.1';
 // On packaged folder builds, __dirname belongs to resources/app.asar (read only).
 // Data must live next to the real executable, never inside app.asar.
 const portableRoot=resolvePortableRoot({portableDir:process.env.PORTABLE_EXECUTABLE_DIR,
@@ -35,6 +36,7 @@ const bundledDir=app.isPackaged?path.join(process.resourcesPath,'reader',PLAYER_
 const exportsDir=path.join(dataRoot,'exports');
 const libraryDir=path.join(dataRoot,'data','libraries');
 const sourceDir=path.join(dataRoot,'data','sources');
+const snapshotDir=path.join(dataRoot,'data','source-snapshots');
 const catalogCache=new Map();
 function player(){
  if(!playerPromise){playerPromise=ensureRuntime({cacheDir,bundledDir}).catch(e=>{playerPromise=null;throw e;});}
@@ -103,7 +105,7 @@ ipcMain.handle('catalog:check',async(e,repo)=>{
  const tracked=sources.find(x=>x.id===id);
  if(!tracked)throw Error('Source non enregistrée.');
  const result=await Catalog.checkRepo(tracked.repo);
- catalogCache.set(id,{at:Date.now(),assets:result.assets});
+ catalogCache.set(id,{at:Date.now(),assets:result.assets,commits:[result.latestCommit?.sha,...(result.tagRefs||[]).map(x=>x.sha)].filter(x=>/^[a-f0-9]{40}$/i.test(x||''))});
  return result;
 });
 ipcMain.handle('catalog:install',async(e,repo,assetId)=>{
@@ -120,6 +122,27 @@ ipcMain.handle('catalog:install',async(e,repo,assetId)=>{
  const report=await Registry.extractLibraries(bytes,libraryDir,{sourceName:source.repo+'@'+asset.tag+' / '+asset.name,origin:'github-release'});
  await Registry.saveLastImport(libraryDir,report,source.repo+' / '+asset.name);
  return {report,source:source.repo,asset:asset.name};
+});
+
+// Upstream sources are saved at a Git commit, never executed. A library is
+// imported only if all manifest-declared JS and CSS assets already exist.
+ipcMain.handle('catalog:source-snapshot',async(e,repo,sha)=>{
+ checkCaller(e);
+ const id=UpdateSources.key(repo);
+ const source=(await UpdateSources.readSources(sourceDir)).find(x=>x.id===id);
+ if(!source)throw Error('Source non enregistrée.');
+ const entry=catalogCache.get(id);
+ if(!entry||Date.now()-entry.at>20*60*1000||!entry.commits.includes(sha))throw Error('Révision non vérifiée. Cliquez sur Vérifier.');
+ const bytes=await Catalog.downloadSource(source.repo,sha);
+ const inspected=await Snapshots.inspectArchive(bytes);
+ const snapshot=await Snapshots.storeSnapshot(snapshotDir,source.repo,sha,Buffer.from(bytes),inspected);
+ if(source.kind!=='library')return {kind:'core-source',snapshot,installed:false,reason:'Révision officielle conservée, non activée dans le moteur.'};
+ if(inspected.kind!=='library')return {kind:'unpackaged',snapshot,installed:false,reason:inspected.reason};
+ if(inspected.buildRequired)return {kind:'requires-build',snapshot,installed:false,reason:inspected.reason,missing:inspected.missing};
+ const ready=await Snapshots.packageReadyLibrary(bytes,inspected);
+ const report=await Registry.extractLibraries(ready,libraryDir,{sourceName:source.repo+'@'+sha.slice(0,12),origin:'github-source-compiled'});
+ await Registry.saveLastImport(libraryDir,report,source.repo+'@'+sha.slice(0,12));
+ return {kind:'installed',snapshot,installed:true,report,library:inspected.machineName,version:inspected.version};
 });
 
 ipcMain.handle('desktop:import-player',async e=>{
@@ -166,7 +189,7 @@ ipcMain.handle('desktop:reveal-export',async(e)=>{
 });
 function createWindow(){
  mainWindow=new BrowserWindow({
-  title:'H5P Studio Portable 0.5.0',width:1400,height:930,minWidth:920,minHeight:650,
+  title:'H5P Studio Portable 0.5.1',width:1400,height:930,minWidth:920,minHeight:650,
   backgroundColor:'#f5f7fa',show:true,
   webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,
    preload:path.join(__dirname,'preload.cjs')}

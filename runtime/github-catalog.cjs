@@ -5,6 +5,7 @@ const https=require('node:https');
 const Sources=require('./update-sources.cjs');
 const MAX_METADATA=3*1024*1024;
 const MAX_PACKAGE=250*1024*1024;
+const SOURCE_HOSTS=new Set(['codeload.github.com']);
 const DOWNLOAD_HOSTS=new Set(['github.com','release-assets.githubusercontent.com','objects.githubusercontent.com']);
 function getBuffer(url,{limit=MAX_METADATA,timeout=16000,allowedHosts=new Set(['api.github.com']),redirects=0,headers={}}={}){
  return new Promise((resolve,reject)=>{
@@ -62,6 +63,7 @@ async function checkRepo(repo,request=apiJson){
  return {repo:normalized,checkedAt:new Date().toISOString(),stable:stable?{tag:stable.tag_name,date:stable.published_at}:null,
   latestRelease:newest?{tag:newest.tag_name,date:newest.published_at,prerelease:!!newest.prerelease}:null,
   tags:t.filter(x=>typeof x.name==='string').map(x=>x.name).slice(0,8),
+  tagRefs:t.filter(x=>typeof x.name==='string'&&/^[a-f0-9]{40}$/i.test(x.commit?.sha||'')).map(x=>({tag:x.name,sha:x.commit.sha})).slice(0,8),
   latestCommit:commit?.sha?{sha:commit.sha,date:commit.commit?.committer?.date||null}:null,
   assets:releaseAssets(r),errors};
 }
@@ -73,4 +75,12 @@ async function downloadAsset(asset,request=getBuffer){
  if(bytes.length<4||bytes[0]!==0x50||bytes[1]!==0x4b)throw Error('Ce fichier de release n’est pas une archive ZIP/H5P valide.');
  return bytes;
 }
-module.exports={getBuffer,apiJson,releaseAssets,checkRepo,downloadAsset,DOWNLOAD_HOSTS};
+async function downloadSource(repo,sha,request=getBuffer){
+ const normalized=Sources.canonical(repo);
+ if(!/^[a-f0-9]{40}$/i.test(sha||''))throw Error('Révision Git non résolue.');
+ const url='https://codeload.github.com/'+normalized+'/zip/'+sha.toLowerCase();
+ const bytes=await request(url,{limit:80*1024*1024,timeout:60000,allowedHosts:SOURCE_HOSTS,headers:{'Accept':'application/zip'}});
+ if(bytes.length<4||bytes[0]!==0x50||bytes[1]!==0x4b)throw Error('Archive GitHub invalide.');
+ return bytes;
+}
+module.exports={getBuffer,apiJson,releaseAssets,checkRepo,downloadAsset,downloadSource,DOWNLOAD_HOSTS,SOURCE_HOSTS};

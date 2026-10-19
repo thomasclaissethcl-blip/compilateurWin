@@ -1,3 +1,17 @@
+# Version 0.5.1 : récupération des sources et compilation distante de Game Map
+
+- Découverte des identifiants SHA des tags GitHub et du dernier commit.
+- Téléchargement d'une révision exacte depuis codeload.github.com, par action explicite uniquement.
+- Instantanés persistants avec empreinte SHA-256, séparés de l'environnement d'exécution.
+- Contrôle des ressources déclarées dans `library.json` avant toute installation d'une bibliothèque non préalablement empaquetée.
+- En l'absence de fichiers JS/CSS compilés, conservation du code source sans installation ni activation implicite.
+- Workflow GitHub Actions manuel dédié au build de Game Map et H5PEditor.GameMap, avec ZIP distinct pour chacun.
+- Outil d'empaquetage local de bibliothèque déjà compilée, contrôlant les ressources requises.
+- Aucune mise à jour du cœur actif, aucun éditeur visuel ni migration de contenus dans cette version.
+- **94 tests automatisés réussis sur les sources**, compilation GitHub et test Windows restant à effectuer.
+
+---
+
 # Version 0.5.0 : premières sources de mises à jour
 
 - Suivi explicite des releases, tags et commits de dépôts GitHub H5P officiels et tiers.
