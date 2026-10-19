@@ -124,7 +124,7 @@
   }
 
   // Registry preferences are stored separately. A selected version NEVER
-  // rewrites library.json, upgrades H5P content or changes HTML export in V0.4.1.
+  // rewrites library.json, upgrades H5P content or changes HTML export in V0.5.0.
   function registryStatus(msg) { text('registryStatus',msg); }
   function option(select,value,label) {
     const el=document.createElement('option');el.value=value;el.textContent=label;select.append(el);
@@ -331,6 +331,89 @@
     dirty=false; text('changeStatus','Modifications réinitialisées'); $('changeStatus').className='';
     clearAlert();
   }
+  // GitHub sources are read-only until a release asset is explicitly selected.
+  // A library installed here remains separate from the active reader/editor.
+  
+  function catalogStatus(value){text('catalogStatus',value);}
+  async function renderSources(){
+    const table=$('catalogSourcesTable');table.replaceChildren();
+    if(!window.studioDesktop?.catalogSources){catalogStatus('Cette fonction nécessite H5P Studio Windows.');return;}
+    try{
+      const sources=await window.studioDesktop.catalogSources();
+      for(const source of sources){
+        const tr=document.createElement('tr');
+        const name=document.createElement('td');name.textContent=source.repo+(source.official?' (officiel)':'');
+        const kind=document.createElement('td');kind.textContent=({'core-view':'Cœur de lecture','core-editor':'Cœur d’édition','hub-client':'Client Hub','library':'Bibliothèque'})[source.kind]||source.kind;
+        const actions=document.createElement('td');
+        const check=document.createElement('button');check.className='secondary';check.type='button';check.textContent='Vérifier';
+        check.addEventListener('click',()=>checkCatalog(source));actions.append(check);
+        if(!source.official){
+          const remove=document.createElement('button');remove.className='secondary';remove.type='button';remove.textContent='Retirer du suivi';
+          remove.style.marginLeft='8px';remove.addEventListener('click',async()=>{
+            if(!confirm('Retirer cette source du suivi ? Les bibliothèques déjà installées seront conservées.'))return;
+            try{await window.studioDesktop.catalogRemove(source.repo);await renderSources();}
+            catch(e){catalogStatus('Retrait impossible : '+(e.message||e));}
+          });actions.append(remove);
+        }
+        tr.append(name,kind,actions);table.append(tr);
+      }
+      catalogStatus(sources.length+' source(s) suivie(s). Vérification sur demande, aucune mise à jour automatique.');
+    }catch(e){catalogStatus('Impossible de lire les sources : '+(e.message||e));}
+  }
+  async function checkCatalog(source){
+    $('catalogAssets').replaceChildren();
+    text('catalogReport','Consultation des publications GitHub…');
+    catalogStatus('Vérification de '+source.repo+'…');
+    try{
+      const r=await window.studioDesktop.catalogCheck(source.repo);
+      const lines=[
+        'Source : '+r.repo,'Consultation : '+r.checkedAt,
+        'Dernière release stable observée : '+(r.stable?.tag||'Non trouvée'),
+        'Dernière release publiée observée : '+(r.latestRelease?.tag||'Non trouvée')+(r.latestRelease?.prerelease?' (préliminaire)':''),
+        'Tags récents (ordre retourné par GitHub) : '+(r.tags.length?r.tags.join(', '):'aucun'),
+        'Commit récent sur la branche par défaut : '+(r.latestCommit?.sha||'Indisponible'),
+        'Date du commit : '+(r.latestCommit?.date||'Indisponible'),
+        'Paquets .h5p/.zip en pièces jointes : '+r.assets.length,
+        ...(r.errors.length?['Limites de consultation : '+r.errors.join(' ; ')]:[]),
+        '',
+        source.kind==='library'?'Un paquet téléchargé sera installé dans le registre, sans changer l’activité.':'Le cœur est suivi mais ne peut pas encore être remplacé automatiquement dans ce prototype.'
+      ];
+      text('catalogReport',lines.join('\n'));
+      const assets=$('catalogAssets');assets.replaceChildren();
+      if(source.kind==='library'){
+        for(const asset of r.assets){
+          const el=document.createElement('div');el.className='asset';
+          const description=document.createElement('span');
+          description.textContent=asset.name+' | '+asset.tag+(asset.prerelease?' (préliminaire)':'')+' | '+(asset.bytes/1024/1024).toFixed(1)+' Mo';
+          const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='Installer ce paquet';
+          button.addEventListener('click',async()=>{
+            if(!confirm('Installer le paquet '+asset.name+' provenant de '+source.repo+' ? Il peut contenir du JavaScript tiers. Les versions existantes seront conservées.'))return;
+            button.disabled=true;catalogStatus('Téléchargement et contrôle du paquet '+asset.name+'…');
+            try{
+              const out=await window.studioDesktop.catalogInstall(source.repo,asset.id);
+              const c=out.report.counts;
+              catalogStatus(`Import terminé : ${c.installed} installée(s), ${c.alreadyInstalled} déjà présente(s), ${c.rejected} rejet(s).`);
+              if(c.rejected)showAlert('Certaines bibliothèques ont été rejetées. Consultez le rapport d’importation dans le registre.','warning');
+              lastImportLoaded=false;await refreshRegistry();
+            }catch(e){catalogStatus('Installation impossible : '+(e.message||e));}
+            finally{button.disabled=false;}
+          });
+          el.append(description,button);assets.append(el);
+        }
+        if(!r.assets.length){const hint=document.createElement('p');hint.className='muted';hint.textContent='Aucun fichier .h5p/.zip empaqueté en pièce jointe des releases consultées. Import local ou compilation du projet source nécessaire.';assets.append(hint);}
+      }
+      catalogStatus('Consultation terminée : '+r.repo+'.');
+    }catch(e){text('catalogReport','Consultation impossible : '+(e.message||e));catalogStatus('Échec de consultation : '+source.repo);}
+  }
+  $('catalogRefreshBtn').addEventListener('click',renderSources);
+  $('catalogAddBtn').addEventListener('click',async()=>{
+    const value=$('catalogRepoInput').value.trim();if(!value){catalogStatus('Indiquez un dépôt GitHub.');return;}
+    try{
+      const r=await window.studioDesktop.catalogAdd(value);
+      $('catalogRepoInput').value='';await renderSources();
+      catalogStatus(r.existing?'Source déjà suivie.':'Source ajoutée. Cliquez sur Vérifier pour consulter ses publications.');
+    }catch(e){catalogStatus('Ajout impossible : '+(e.message||e));}
+  });
   $('registryFromCurrentBtn').addEventListener('click',importCurrentLibraries);
   $('registryFromFileBtn').addEventListener('click',importLocalLibraries);
   $('refreshRegistryBtn').addEventListener('click',refreshRegistry);
@@ -365,5 +448,5 @@
   text('runtimeVersion','Standalone '+H5PStaticBuilder.PLAYER_VERSION+' (lecteur géré par Electron ; compatibilité à valider)');
   $('desktopFallback').hidden=Boolean(window.studioDesktop?.isDesktop);
   if(!window.studioDesktop?.isDesktop){$('viewBtn').disabled=true;$('staticBtn').disabled=true;}
-  else {window.studioDesktop.info().catch(()=>{});refreshRegistry();}
+  else {window.studioDesktop.info().catch(()=>{});refreshRegistry();renderSources();}
 })();

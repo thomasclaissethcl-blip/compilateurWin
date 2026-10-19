@@ -8,7 +8,9 @@ const {fullscreenAllowed}=require('../runtime/fullscreen-permission.cjs');
 const Registry=require('../runtime/library-registry.cjs');
 const {assess}=require('../runtime/dependency-resolver.cjs');
 const {evidence}=require('../runtime/core-evidence.cjs');
-const APP_VERSION='0.4.2';
+const UpdateSources=require('../runtime/update-sources.cjs');
+const Catalog=require('../runtime/github-catalog.cjs');
+const APP_VERSION='0.5.0';
 // On packaged folder builds, __dirname belongs to resources/app.asar (read only).
 // Data must live next to the real executable, never inside app.asar.
 const portableRoot=resolvePortableRoot({portableDir:process.env.PORTABLE_EXECUTABLE_DIR,
@@ -32,6 +34,8 @@ const cacheDir=path.join(dataRoot,'data','runtime','standalone',PLAYER_VERSION);
 const bundledDir=app.isPackaged?path.join(process.resourcesPath,'reader',PLAYER_VERSION):path.join(portableRoot,'runtime-bundled',PLAYER_VERSION);
 const exportsDir=path.join(dataRoot,'exports');
 const libraryDir=path.join(dataRoot,'data','libraries');
+const sourceDir=path.join(dataRoot,'data','sources');
+const catalogCache=new Map();
 function player(){
  if(!playerPromise){playerPromise=ensureRuntime({cacheDir,bundledDir}).catch(e=>{playerPromise=null;throw e;});}
  return playerPromise;
@@ -87,6 +91,37 @@ ipcMain.handle('registry:select',async(e,projectId,machineName,variantId)=>{
  checkCaller(e);return Registry.setChoice(libraryDir,projectId,machineName,variantId);
 });
 
+// Version tracking is read-only until the user explicitly installs a release asset.
+// A cached asset ID is required: the renderer cannot provide arbitrary URLs.
+ipcMain.handle('catalog:sources',async e=>{checkCaller(e);return UpdateSources.readSources(sourceDir);});
+ipcMain.handle('catalog:add',async(e,repo)=>{checkCaller(e);return UpdateSources.addSource(sourceDir,repo);});
+ipcMain.handle('catalog:remove',async(e,repo)=>{checkCaller(e);return UpdateSources.removeSource(sourceDir,repo);});
+ipcMain.handle('catalog:check',async(e,repo)=>{
+ checkCaller(e);
+ const id=UpdateSources.key(repo);
+ const sources=await UpdateSources.readSources(sourceDir);
+ const tracked=sources.find(x=>x.id===id);
+ if(!tracked)throw Error('Source non enregistrée.');
+ const result=await Catalog.checkRepo(tracked.repo);
+ catalogCache.set(id,{at:Date.now(),assets:result.assets});
+ return result;
+});
+ipcMain.handle('catalog:install',async(e,repo,assetId)=>{
+ checkCaller(e);
+ if(!Number.isSafeInteger(assetId)||assetId<1)throw Error('Fichier de release invalide.');
+ const id=UpdateSources.key(repo);
+ const source=(await UpdateSources.readSources(sourceDir)).find(x=>x.id===id);
+ if(!source||source.kind!=='library')throw Error('Installation permise uniquement pour une source de bibliothèque enregistrée.');
+ const entry=catalogCache.get(id);
+ if(!entry||Date.now()-entry.at>20*60*1000)throw Error('Vérifiez à nouveau les publications de cette source.');
+ const asset=entry.assets.find(a=>a.id===assetId);
+ if(!asset)throw Error('Fichier absent de la publication vérifiée.');
+ const bytes=await Catalog.downloadAsset(asset);
+ const report=await Registry.extractLibraries(bytes,libraryDir,{sourceName:source.repo+'@'+asset.tag+' / '+asset.name,origin:'github-release'});
+ await Registry.saveLastImport(libraryDir,report,source.repo+' / '+asset.name);
+ return {report,source:source.repo,asset:asset.name};
+});
+
 ipcMain.handle('desktop:import-player',async e=>{
  checkCaller(e);const selected=await dialog.showOpenDialog(mainWindow,{title:'Sélectionner le dossier player du lecteur H5P',properties:['openDirectory']});
  if(selected.canceled||!selected.filePaths.length)return {cancelled:true};
@@ -131,7 +166,7 @@ ipcMain.handle('desktop:reveal-export',async(e)=>{
 });
 function createWindow(){
  mainWindow=new BrowserWindow({
-  title:'H5P Studio Portable 0.4.2',width:1400,height:930,minWidth:920,minHeight:650,
+  title:'H5P Studio Portable 0.5.0',width:1400,height:930,minWidth:920,minHeight:650,
   backgroundColor:'#f5f7fa',show:true,
   webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,
    preload:path.join(__dirname,'preload.cjs')}

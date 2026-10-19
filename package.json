@@ -1,8 +1,8 @@
 {
   "name": "h5p-studio-portable",
   "productName": "H5P Studio Portable",
-  "version": "0.4.2",
-  "description": "H5P Studio Portable : diagnostics, integrated preview, HTML static export and local multiversion registry",
+  "version": "0.5.0",
+  "description": "H5P Studio Portable : diagnostics, previews, static HTML exports, local versioned registry, GitHub release tracking",
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {
@@ -31,7 +31,7 @@
     ],
     "asar": true,
     "win": {
-      "artifactName": "H5P-Studio-Portable-0.4.2-${arch}.${ext}"
+      "artifactName": "H5P-Studio-Portable-0.5.0-${arch}.${ext}"
     },
     "extraResources": [
       {

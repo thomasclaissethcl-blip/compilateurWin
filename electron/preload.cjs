@@ -16,6 +16,11 @@ if(process.isMainFrame){
   registryImportOpen:(bytes,name)=>ipcRenderer.invoke('registry:import-open',bytes,name),
   registryImportLocal:()=>ipcRenderer.invoke('registry:import-local'),
   registryChoices:id=>ipcRenderer.invoke('registry:choices',id),
-  registrySelect:(id,name,variant)=>ipcRenderer.invoke('registry:select',id,name,variant)
+  registrySelect:(id,name,variant)=>ipcRenderer.invoke('registry:select',id,name,variant),
+  catalogSources:()=>ipcRenderer.invoke('catalog:sources'),
+  catalogAdd:repo=>ipcRenderer.invoke('catalog:add',repo),
+  catalogRemove:repo=>ipcRenderer.invoke('catalog:remove',repo),
+  catalogCheck:repo=>ipcRenderer.invoke('catalog:check',repo),
+  catalogInstall:(repo,assetId)=>ipcRenderer.invoke('catalog:install',repo,assetId)
  }));
 }

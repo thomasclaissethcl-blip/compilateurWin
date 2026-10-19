@@ -50,3 +50,9 @@ button.secondary:hover{background:#f3f7fd}button:disabled{cursor:default;opacity
 .registry-details summary{cursor:pointer;font-weight:600}
 .registry-details .report,.registry-audit .report{max-height:370px;overflow:auto;white-space:pre-wrap}
 .registry-audit{margin:14px 0}
+
+/* 0.5.0 GitHub source catalogue */
+.catalog-input{flex:1;min-width:260px;max-width:560px;padding:10px;border:1px solid #cad7e6;border-radius:8px;color:#24354a}
+.catalog-assets{display:grid;gap:12px;margin-top:15px}
+.catalog-assets .asset{padding:12px;border:1px solid #d6e0ea;border-radius:9px;background:#fff;display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap}
+.catalog-assets .asset span{font-size:12px;color:#40526b;overflow-wrap:anywhere}
