@@ -22,10 +22,13 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-audit --no-fund
+      - name: Audit de sécurité des dépendances (informatif)
+        run: npm audit --audit-level=high
+        continue-on-error: true
       - run: npm test
       - run: npm run build:win
       - uses: actions/upload-artifact@v4
         with:
-          name: H5P-Studio-Portable-0.4.2-Windows-DOSSIER
+          name: H5P-Studio-Portable-0.5.0-Windows-DOSSIER
           path: dist/win-unpacked/
           if-no-files-found: error
