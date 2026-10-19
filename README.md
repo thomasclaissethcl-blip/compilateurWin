@@ -1,47 +1,28 @@
-# H5P Studio Portable 0.5.1 (expérimental)
+# H5P Studio Portable 0.5.2 (expérimental)
 
-Application Windows 11 en distribution **DOSSIER**, construite par GitHub Actions sans installation de Node.js sur le poste utilisateur.
+Application Electron Windows 11, distribuée sous forme de dossier portable, pour analyser, importer, prévisualiser et exporter des contenus H5P vers un site HTML statique.
 
-## Nouveauté 0.5.1 : instantanés de sources par commit et compilation Game Map
+## Nouveautés 0.5.2
 
-L'onglet **Sources et mises à jour** propose maintenant, après avoir cliqué sur **Vérifier**, des boutons **Examiner cette révision** pour le dernier commit et les tags dont le SHA est disponible. Le programme télécharge l'archive du commit directement sur `codeload.github.com`, la contrôle et conserve un instantané sous `data/source-snapshots/` avec un manifeste SHA-256. Il n'exécute pas le code téléchargé.
+- Historique persistant des téléchargements de sources et des installations de paquets avec statut visible sous l'action.
+- Ouverture du fichier source dans l'Explorateur Windows et liste des révisions du cœur sauvegardées.
+- Compilation à distance via un **workflow générique et des recettes validées**. Le cas Game Map est fourni comme première recette.
+- Les sources du cœur téléchargées restent en attente d'adaptateur, non activées dans Standalone.
 
-- **Cœur de lecture et cœur d'édition :** le code source est conservé à une révision exacte, mais le cœur actif de H5P Studio reste inchangé. Aucun profil compatible n'est certifié automatiquement.
-- **Bibliothèque tierce :** si le fichier `library.json` et tous ses fichiers JS/CSS déclarés sont présents, les ressources sont préparées et la bibliothèque peut être inscrite dans le registre, sous réserve du contrôle habituel. Si des fichiers compilés manquent, le programme conserve les sources et indique lesquels manquent. Il ne prétend pas avoir installé cette bibliothèque.
-- **Game Map :** un workflow manuel `.github/workflows/build-game-map.yml` compile le dépôt `otacke/h5p-game-map` et son composant `otacke/h5p-editor-game-map` sur GitHub Actions, sans Node.js sur Windows. Il produit deux archives `.zip` de bibliothèques destinées à l'action **Importer un paquet local** du registre. Ces archives ne constituent pas des activités `.h5p` autonomes.
+Consulter [GUIDE-052.md](GUIDE-052.md) pour la mise à jour Windows et les tests.
 
-Voir [GUIDE-051.md](GUIDE-051.md). L'édition visuelle et l'activation d'un nouveau cœur ne sont pas livrées dans cette version.
+## Compiler sous GitHub Actions (sans Node.js sur le poste)
 
-## Fonctions existantes conservées
+Déposer les sources à la racine du dépôt GitHub. Lancer `.github/workflows/windows-portable.yml`, puis télécharger `H5P-Studio-Portable-0.5.2-Windows-DOSSIER`. Le dossier `data/` doit être conservé entre les mises à jour.
 
-- Importation, diagnostic, modification JSON et exportation `.h5p`.
-- Prévisualisation H5P intégrée avec plein écran (lecteur embarqué H5P Standalone 3.8.2).
-- Exportation HTML multifichier autonome pour hébergement HTTP(S) statique, notamment Moodle.
-- Registre portable de bibliothèques, plusieurs versions et variantes sans écrasement.
-- Analyse statique des dépendances avec API du lecteur non certifiée.
+Le workflow `.github/workflows/build-h5p-libraries.yml` construit des bibliothèques **seulement depuis des recettes approuvées**. Le catalogue des recettes est situé dans `recipes/`. L'installation d'une nouvelle bibliothèque est explicite ; l'activité ouverte ne change pas automatiquement de version.
 
-## Nouveauté : sources GitHub (0.5.0)
+## Tests
 
-L'onglet **Sources et mises à jour** référence en permanence les dépôts officiels `h5p/h5p-php-library`, `h5p/h5p-editor-php-library` et `h5p/h5p-hub-client`.
+Avec Node.js 22 dans l'environnement de compilation : `npm test`.
 
-Vous pouvez ajouter des dépôts de **bibliothèques tierces** au format `auteur/depot` ou `https://github.com/auteur/depot`. L'application demande, sur clic, les dernières releases, les tags et le commit récent de la branche par défaut au moyen de l'API publique GitHub. Les résultats sont des **observations**, et non une validation de compatibilité.
+## Limites et sécurité
 
-Lorsqu'une release du développeur inclut un **paquet `.h5p` ou `.zip` directement en pièce jointe**, vous pouvez le télécharger et l'installer explicitement dans le registre local. Le logiciel vérifie la provenance GitHub, limite la taille, contrôle l'archive et ne remplace jamais les versions existantes.
+Le moteur actuellement actif est H5P Standalone 3.8.2. Le cœur officiel H5P peut être téléchargé à un commit exact mais pas activé sans adaptateur, et l'API embarquée n'est pas certifiée. L'éditeur visuel reste à intégrer. Les exports HTML multifichiers doivent être servis par HTTP(S) et testés dans Moodle ou sur hébergement statique avant leur diffusion.
 
-Les archives de code source brut GitHub **ne sont pas converties automatiquement** en bibliothèque H5P. Certaines nécessitent un processus de compilation spécifique. Les bibliothèques importées ne sont pas automatiquement activées dans un contenu ou dans le lecteur.
-
-Le **cœur officiel H5P** peut être suivi et son code source téléchargé, mais **ni son installation comme moteur actif, ni son remplacement dans l'éditeur ne sont disponibles en 0.5.1**. Ce développement est distinct et plus complexe que l'installation d'une bibliothèque.
-
-## Protection et confidentialité
-
-L'import H5P reste local. L'onglet mises à jour nécessite Internet ; il interroge les dépôts GitHub enregistrés uniquement sur action de l'utilisateur. Les dépôts tiers contiennent potentiellement du JavaScript non fiable. Leur installation est explicite, sans exécution immédiate, et leurs versions sont identifiées par SHA-256 dans le registre. Une empreinte locale **n'est pas une signature du développeur**.
-
-L'API GitHub publique applique des quotas et certaines releases ne proposent aucun paquet directement installable. Les projets privés ou nécessitant une authentification ne sont pas pris en charge.
-
-## Compilation (GitHub, sans Node.js local)
-
-Déposer les sources à la racine du dépôt GitHub, notamment `.github/workflows/windows-portable.yml`. Dans l'onglet Actions, exécuter **Compiler H5P Studio Windows DOSSIER**, puis télécharger l'artefact `H5P-Studio-Portable-0.5.1-Windows-DOSSIER`.
-
-Les données portables sont stockées dans `data/` à côté de l'exécutable. **Sauvegarder le dossier `data/` de la version précédente** avant migration et le recopier application fermée. Les sources personnalisées figurent sous `data/sources/github-sources.json`.
-
-Cette version a été testée automatiquement sur Node.js pour la logique métier ; aucun `.exe` Windows n'a été compilé ou validé ici. La compilation GitHub et le test réel sur Windows 11 restent nécessaires.
+Les recettes peuvent lancer du code de développeurs tiers dans GitHub Actions : ne valider que des dépôts et des références de confiance ; ne pas fournir de secrets au job.

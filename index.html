@@ -124,7 +124,7 @@
       </section>
       <section class="panel" data-panel="updates" hidden>
         <div class="sectionhead"><div><h2>Sources et mises à jour H5P</h2><p class="subtitle">Cœur officiel de lecture et d’édition, bibliothèques officielles et dépôts tiers.</p></div><button class="secondary" id="catalogRefreshBtn" type="button">Rafraîchir la liste</button></div>
-        <p class="info">V0.5.1 : consultation GitHub et conservation des sources exactes par commit SHA. Les bibliothèques dont les ressources compilées sont présentes peuvent être ajoutées au registre. Les sources qui nécessitent une compilation sont conservées, mais ne sont pas installées. Le cœur est téléchargeable en tant que source, sans activation dans le moteur.</p>
+        <p class="info">V0.5.2 : consultation GitHub et conservation des sources exactes par commit SHA. Les bibliothèques dont les ressources compilées sont présentes peuvent être ajoutées au registre. Les sources qui nécessitent une compilation sont conservées, mais ne sont pas installées. Le cœur est téléchargeable en tant que source, sans activation dans le moteur.</p>
         <div class="panel-inline">
           <h3>Ajouter une source de bibliothèque tierce</h3>
           <div class="btns"><input id="catalogRepoInput" type="text" placeholder="propriétaire/dépôt ou URL github.com" aria-label="Dépôt GitHub" maxlength="160" class="catalog-input"><button type="button" class="secondary" id="catalogAddBtn">Suivre ce dépôt</button></div>
@@ -138,7 +138,17 @@
           <div id="catalogAssets" class="catalog-assets"></div>
           <div id="catalogSourceRefs" class="catalog-assets"></div>
         </div>
-        <p class="muted">Pour Game Map et son éditeur, un workflow GitHub de compilation optionnel est inclus dans les sources. Les sources externes peuvent exécuter du JavaScript lors de la prévisualisation future. N’installez que des bibliothèques provenant d’auteurs de confiance. L’installation dans le registre ne remplace aucune version existante.</p>
+        <div class="panel-inline">
+          <div class="sectionhead"><h3>Historique des opérations</h3><button type="button" class="secondary" id="journalRefreshBtn">Actualiser</button></div>
+          <p class="muted">Révisions téléchargées, éventuelles erreurs et emplacement local. Historique conservé après fermeture (120 opérations au maximum).</p>
+          <div id="journalEntries" class="operation-list" aria-live="polite">Chargement de l’historique…</div>
+        </div>
+        <div class="panel-inline">
+          <div class="sectionhead"><h3>Révisions du cœur conservées</h3><button type="button" class="secondary" id="coreRefreshBtn">Actualiser</button></div>
+          <p class="muted">Ces sources sont conservées pour préparer les adaptateurs futurs ; elles ne sont pas des versions du cœur activées.</p>
+          <pre class="report" id="coreCandidatesReport">Aucune source du cœur examinée.</pre>
+        </div>
+        <p class="muted">Un workflow GitHub générique, utilisant exclusivement des recettes approuvées, est inclus dans les sources. Game Map est la première recette disponible. Les sources externes peuvent exécuter du JavaScript lors de la prévisualisation future. N’installez que des bibliothèques provenant d’auteurs de confiance. L’installation dans le registre ne remplace aucune version existante.</p>
       </section>
    <p class="muted">Moteur d’exécution : <span id="runtimeVersion">Standalone 3.8.2 (profil de compatibilité à vérifier)</span>. Éditeur visuel encore à intégrer ; compatibilité Moodle à vérifier.</p>
  </main>

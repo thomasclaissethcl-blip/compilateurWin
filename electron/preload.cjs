@@ -22,6 +22,9 @@ if(process.isMainFrame){
   catalogRemove:repo=>ipcRenderer.invoke('catalog:remove',repo),
   catalogCheck:repo=>ipcRenderer.invoke('catalog:check',repo),
   catalogInstall:(repo,assetId)=>ipcRenderer.invoke('catalog:install',repo,assetId),
-  catalogSnapshot:(repo,sha)=>ipcRenderer.invoke('catalog:source-snapshot',repo,sha)
+  catalogSnapshot:(repo,sha)=>ipcRenderer.invoke('catalog:source-snapshot',repo,sha),
+  catalogRevealSource:(repo,sha)=>ipcRenderer.invoke('catalog:reveal-source',repo,sha),
+  journalList:()=>ipcRenderer.invoke('journal:list'),
+  coreCandidates:()=>ipcRenderer.invoke('core:candidates')
  }));
 }

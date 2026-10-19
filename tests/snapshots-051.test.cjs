@@ -67,11 +67,10 @@ test('compilation impossible si le manifeste référence un fichier absent',()=>
  await fs.writeFile(path.join(dir,'library.json'),JSON.stringify(manifest));
  await assert.rejects(Packer.collectBuiltLibrary(dir),/absentes/i);
 }));
-test('l’interface dispose des actions de snapshots et du workflow dédié',async()=>{
+test('l’interface dispose des actions de snapshots et du workflow de recettes',async()=>{
  const preload=await fs.readFile(path.join(__dirname,'../electron/preload.cjs'),'utf8');
  const app=await fs.readFile(path.join(__dirname,'../assets/app.js'),'utf8');
- const workflow=await fs.readFile(path.join(__dirname,'../.github/workflows/build-game-map.yml'),'utf8');
+ const workflow=await fs.readFile(path.join(__dirname,'../.github/workflows/build-h5p-libraries.yml'),'utf8');
  assert.match(preload,/catalogSnapshot/);assert.match(app,/Examiner cette révision/);
- assert.match(workflow,/otacke\/h5p-game-map/);assert.match(workflow,/otacke\/h5p-editor-game-map/);
- assert.match(workflow,/npm run build/);assert.match(workflow,/upload-artifact/);
+ assert.match(workflow,/build-recipes\.cjs/);assert.match(workflow,/upload-artifact/);
 });

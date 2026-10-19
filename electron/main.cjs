@@ -11,7 +11,9 @@ const {evidence}=require('../runtime/core-evidence.cjs');
 const UpdateSources=require('../runtime/update-sources.cjs');
 const Catalog=require('../runtime/github-catalog.cjs');
 const Snapshots=require('../runtime/source-snapshots.cjs');
-const APP_VERSION='0.5.1';
+const Journal=require('../runtime/operation-journal.cjs');
+const CoreAdapters=require('../runtime/core-adapters.cjs');
+const APP_VERSION='0.5.2';
 // On packaged folder builds, __dirname belongs to resources/app.asar (read only).
 // Data must live next to the real executable, never inside app.asar.
 const portableRoot=resolvePortableRoot({portableDir:process.env.PORTABLE_EXECUTABLE_DIR,
@@ -37,6 +39,7 @@ const exportsDir=path.join(dataRoot,'exports');
 const libraryDir=path.join(dataRoot,'data','libraries');
 const sourceDir=path.join(dataRoot,'data','sources');
 const snapshotDir=path.join(dataRoot,'data','source-snapshots');
+const journalDir=path.join(dataRoot,'data','operation-journal');
 const catalogCache=new Map();
 function player(){
  if(!playerPromise){playerPromise=ensureRuntime({cacheDir,bundledDir}).catch(e=>{playerPromise=null;throw e;});}
@@ -95,6 +98,16 @@ ipcMain.handle('registry:select',async(e,projectId,machineName,variantId)=>{
 
 // Version tracking is read-only until the user explicitly installs a release asset.
 // A cached asset ID is required: the renderer cannot provide arbitrary URLs.
+ipcMain.handle('journal:list',async e=>{checkCaller(e);return Journal.read(journalDir);});
+ipcMain.handle('core:candidates',async e=>{checkCaller(e);return CoreAdapters.inspect(snapshotDir);});
+ipcMain.handle('catalog:reveal-source',async(e,repo,sha)=>{
+ checkCaller(e);
+ const known=(await UpdateSources.readSources(sourceDir)).some(x=>x.repo.toLowerCase()===String(repo).toLowerCase());
+ if(!known||!Snapshots.SHA.test(sha||''))throw Error('Source non autorisée.');
+ const location=path.join(snapshotDir,Snapshots.idOf(UpdateSources.canonical(repo),sha),'source.zip');
+ if(!(await fsp.stat(location).catch(()=>null))?.isFile())throw Error('Archive source introuvable.');
+ shell.showItemInFolder(location);return {ok:true};
+});
 ipcMain.handle('catalog:sources',async e=>{checkCaller(e);return UpdateSources.readSources(sourceDir);});
 ipcMain.handle('catalog:add',async(e,repo)=>{checkCaller(e);return UpdateSources.addSource(sourceDir,repo);});
 ipcMain.handle('catalog:remove',async(e,repo)=>{checkCaller(e);return UpdateSources.removeSource(sourceDir,repo);});
@@ -118,10 +131,15 @@ ipcMain.handle('catalog:install',async(e,repo,assetId)=>{
  if(!entry||Date.now()-entry.at>20*60*1000)throw Error('Vérifiez à nouveau les publications de cette source.');
  const asset=entry.assets.find(a=>a.id===assetId);
  if(!asset)throw Error('Fichier absent de la publication vérifiée.');
- const bytes=await Catalog.downloadAsset(asset);
- const report=await Registry.extractLibraries(bytes,libraryDir,{sourceName:source.repo+'@'+asset.tag+' / '+asset.name,origin:'github-release'});
- await Registry.saveLastImport(libraryDir,report,source.repo+' / '+asset.name);
- return {report,source:source.repo,asset:asset.name};
+ const op=await Journal.begin(journalDir,{type:'installation',repo:source.repo,reference:asset.tag,description:asset.name});
+ try{
+  const bytes=await Catalog.downloadAsset(asset);
+  const report=await Registry.extractLibraries(bytes,libraryDir,{sourceName:source.repo+'@'+asset.tag+' / '+asset.name,origin:'github-release'});
+  await Registry.saveLastImport(libraryDir,report,source.repo+' / '+asset.name);
+  const c=report.counts;
+  await Journal.finish(journalDir,op,{status:'success',message:`Installées : ${c.installed}, déjà présentes : ${c.alreadyInstalled}, rejetées : ${c.rejected}`});
+  return {report,source:source.repo,asset:asset.name};
+ }catch(error){await Journal.finish(journalDir,op,{status:'error',message:error.message}).catch(()=>{});throw error;}
 });
 
 // Upstream sources are saved at a Git commit, never executed. A library is
@@ -133,16 +151,24 @@ ipcMain.handle('catalog:source-snapshot',async(e,repo,sha)=>{
  if(!source)throw Error('Source non enregistrée.');
  const entry=catalogCache.get(id);
  if(!entry||Date.now()-entry.at>20*60*1000||!entry.commits.includes(sha))throw Error('Révision non vérifiée. Cliquez sur Vérifier.');
- const bytes=await Catalog.downloadSource(source.repo,sha);
- const inspected=await Snapshots.inspectArchive(bytes);
- const snapshot=await Snapshots.storeSnapshot(snapshotDir,source.repo,sha,Buffer.from(bytes),inspected);
- if(source.kind!=='library')return {kind:'core-source',snapshot,installed:false,reason:'Révision officielle conservée, non activée dans le moteur.'};
- if(inspected.kind!=='library')return {kind:'unpackaged',snapshot,installed:false,reason:inspected.reason};
- if(inspected.buildRequired)return {kind:'requires-build',snapshot,installed:false,reason:inspected.reason,missing:inspected.missing};
- const ready=await Snapshots.packageReadyLibrary(bytes,inspected);
- const report=await Registry.extractLibraries(ready,libraryDir,{sourceName:source.repo+'@'+sha.slice(0,12),origin:'github-source-compiled'});
- await Registry.saveLastImport(libraryDir,report,source.repo+'@'+sha.slice(0,12));
- return {kind:'installed',snapshot,installed:true,report,library:inspected.machineName,version:inspected.version};
+ const op=await Journal.begin(journalDir,{type:'source',repo:source.repo,reference:sha,description:'Récupération de sources à un commit précis'});
+ try{
+  const bytes=await Catalog.downloadSource(source.repo,sha);
+  const inspected=await Snapshots.inspectArchive(bytes);
+  const snapshot=await Snapshots.storeSnapshot(snapshotDir,source.repo,sha,Buffer.from(bytes),inspected);
+  let result;
+  if(source.kind!=='library')result={kind:'core-source',snapshot,installed:false,reason:'Révision officielle conservée, non activée dans le moteur.'};
+  else if(inspected.kind!=='library')result={kind:'unpackaged',snapshot,installed:false,reason:inspected.reason};
+  else if(inspected.buildRequired)result={kind:'requires-build',snapshot,installed:false,reason:inspected.reason,missing:inspected.missing};
+  else {
+   const ready=await Snapshots.packageReadyLibrary(bytes,inspected);
+   const report=await Registry.extractLibraries(ready,libraryDir,{sourceName:source.repo+'@'+sha.slice(0,12),origin:'github-source-compiled'});
+   await Registry.saveLastImport(libraryDir,report,source.repo+'@'+sha.slice(0,12));
+   result={kind:'installed',snapshot,installed:report.counts.installed>0||report.counts.alreadyInstalled>0,report,library:inspected.machineName,version:inspected.version};
+  }
+  await Journal.finish(journalDir,op,{status:'success',message:result.kind+' : '+(result.reason||result.library||'Révision conservée')+'; SHA-256 '+snapshot.sha256.slice(0,12),snapshotId:Snapshots.idOf(source.repo,sha)});
+  return result;
+ }catch(error){await Journal.finish(journalDir,op,{status:'error',message:error.message}).catch(()=>{});throw error;}
 });
 
 ipcMain.handle('desktop:import-player',async e=>{
