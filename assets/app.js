@@ -6,7 +6,7 @@
   let active = 'contenu';
   let dirty = false;
   let lastValidated = false;
-  let importBytes=null,projectId=null,registryRows=[],registryChoices={};
+  let importBytes=null,projectId=null,registryRows=[],registryChoices={},lastImportLoaded=false;
   function text(id, value) { $(id).textContent = value; }
   function showAlert(message, kind='info') {
     const box = $('message'); box.textContent = message; box.dataset.kind = kind; box.hidden = false;
@@ -178,6 +178,11 @@
     if(!window.studioDesktop?.registryList){registryStatus('Le registre nécessite l’application Windows compilée.');return;}
     try{
       registryRows=await window.studioDesktop.registryList();
+      if(!lastImportLoaded && window.studioDesktop.registryLastImport){
+        lastImportLoaded=true;
+        try{const previous=await window.studioDesktop.registryLastImport();if(previous)renderImportReport(previous);}
+        catch(e){text('registryImportReport','Impossible de relire le dernier rapport : '+(e.message||e));}
+      }
       if(window.studioDesktop.registryCoreEvidence){const e=await window.studioDesktop.registryCoreEvidence();text('coreEvidenceStatus',`Lecteur ${e.playerVersion}. API du cœur : NON CERTIFIÉE. Source : ${e.origin?.source || 'métadonnées de provenance indisponibles'}. ${e.explanation}`);}
       registryChoices=projectId?await window.studioDesktop.registryChoices(projectId):{};
       registryRender();registryStatus(`${registryRows.length} variante(s) dans le registre local. Aucune mise à jour automatique.`);
@@ -186,12 +191,15 @@
   function renderImportReport(result){
     const rows=result.outcomes||[];
     const summary=[
-      `Manifests library.json trouvés : ${result.totalFound}`,
-      `Nouvelles installations : ${result.installed.length}`,
-      `Déjà présentes dans le registre : ${result.skipped.length}`,
-      `Rejets : ${result.errors.length}`,
+      ...(result.date?[`Date : ${result.date}`]:[]),
+      ...(result.sourceName?[`Source : ${result.sourceName}`]:[]),
+      `Manifests library.json trouvés : ${result.totalFound}`, 
+      `Nouvelles installations : ${result.installed?.length ?? result.counts?.installed ?? 0}`,
+      `Déjà présentes dans le registre : ${result.skipped?.length ?? result.counts?.alreadyInstalled ?? 0}`,
+      `Rejets : ${result.errors?.length ?? result.counts?.rejected ?? 0}`,
       '',
       result.notice||'Le total du registre inclut les imports précédents.',
+      ...(result.reportWarning?['Attention : '+result.reportWarning]:[]),
       '',
       ...rows.map(r=>`${r.status==='installed'?'INSTALLÉE':r.status==='already-installed'?'DÉJÀ PRÉSENTE':'REJETÉE'} | ${r.manifest} | ${r.library||'?'} ${r.version||''}${r.reason?' | '+r.reason:''}`)
     ];

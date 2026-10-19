@@ -8,7 +8,7 @@ const {fullscreenAllowed}=require('../runtime/fullscreen-permission.cjs');
 const Registry=require('../runtime/library-registry.cjs');
 const {assess}=require('../runtime/dependency-resolver.cjs');
 const {evidence}=require('../runtime/core-evidence.cjs');
-const APP_VERSION='0.4.1';
+const APP_VERSION='0.4.2';
 // On packaged folder builds, __dirname belongs to resources/app.asar (read only).
 // Data must live next to the real executable, never inside app.asar.
 const portableRoot=resolvePortableRoot({portableDir:process.env.PORTABLE_EXECUTABLE_DIR,
@@ -52,6 +52,7 @@ ipcMain.handle('desktop:status',async e=>{checkCaller(e);return {version:APP_VER
 // The registry is intentionally separate from the H5P player/editor. Merely
 // importing or selecting a version never runs its JavaScript or rewrites content.
 ipcMain.handle('registry:list',async e=>{checkCaller(e);return Registry.listLibraries(libraryDir);});
+ipcMain.handle('registry:last-import',async e=>{checkCaller(e);return Registry.readLastImport(libraryDir);});
 ipcMain.handle('registry:core-evidence',async e=>{checkCaller(e);return evidence({playerVersion:PLAYER_VERSION,bundledDir,cacheDir});});
 ipcMain.handle('registry:resolve',async(e,projectId,roots)=>{
  checkCaller(e);
@@ -64,7 +65,9 @@ ipcMain.handle('registry:resolve',async(e,projectId,roots)=>{
 ipcMain.handle('registry:fingerprint',async(e,bytes)=>{checkCaller(e);return Registry.fingerprint(await prepareBytes(bytes));});
 ipcMain.handle('registry:import-open',async(e,bytes,originalName)=>{
  checkCaller(e);const input=await prepareBytes(bytes);
- return {...await Registry.extractLibraries(input,libraryDir,{sourceName:originalName,origin:'archive-h5p'}),projectId:Registry.fingerprint(input)};
+ const result=await Registry.extractLibraries(input,libraryDir,{sourceName:originalName,origin:'archive-h5p'});
+ try{await Registry.saveLastImport(libraryDir,result,originalName);}catch(err){result.reportWarning='Rapport non conservé : '+err.message;}
+ return {...result,projectId:Registry.fingerprint(input)};
 });
 ipcMain.handle('registry:import-local',async e=>{
  checkCaller(e);
@@ -72,7 +75,9 @@ ipcMain.handle('registry:import-local',async e=>{
  if(answer.canceled||!answer.filePaths.length)return {cancelled:true};
  const file=answer.filePaths[0],stat=await fsp.stat(file);
  if(!stat.isFile()||!stat.size||stat.size>250*1024*1024)throw Error('Fichier trop volumineux ou inaccessible.');
- return Registry.extractLibraries(await fsp.readFile(file),libraryDir,{sourceName:path.basename(file),origin:'local'});
+ const result=await Registry.extractLibraries(await fsp.readFile(file),libraryDir,{sourceName:path.basename(file),origin:'local'});
+ try{await Registry.saveLastImport(libraryDir,result,path.basename(file));}catch(err){result.reportWarning='Rapport non conservé : '+err.message;}
+ return result;
 });
 ipcMain.handle('registry:choices',async(e,projectId)=>{
  checkCaller(e);if(!/^[a-f0-9]{64}$/.test(projectId||''))throw Error('Identifiant de projet invalide.');
@@ -126,7 +131,7 @@ ipcMain.handle('desktop:reveal-export',async(e)=>{
 });
 function createWindow(){
  mainWindow=new BrowserWindow({
-  title:'H5P Studio Portable 0.4.1',width:1400,height:930,minWidth:920,minHeight:650,
+  title:'H5P Studio Portable 0.4.2',width:1400,height:930,minWidth:920,minHeight:650,
   backgroundColor:'#f5f7fa',show:true,
   webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,
    preload:path.join(__dirname,'preload.cjs')}

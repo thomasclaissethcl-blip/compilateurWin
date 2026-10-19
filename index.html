@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
- <title>H5P Studio Portable | Version 0.4.1</title>
+ <title>H5P Studio Portable | Version 0.4.2</title>
  <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -24,10 +24,10 @@
       <button id="shortcutStatic" disabled title="Importez un H5P pour produire un ZIP HTML autonome">Export HTML multifichier</button>
       <button data-tab="registry" id="registryTab">Registre multiversion</button>
    </nav>
-   <div class="side-foot">Version 0.4.1<br>Moteur embarqué lors de la compilation. Aucun installateur nécessaire.</div>
+   <div class="side-foot">Version 0.4.2<br>Moteur embarqué lors de la compilation. Aucun installateur nécessaire.</div>
  </aside>
  <main class="main">
-   <div class="head"><div><h1>Atelier d'archives H5P</h1><p class="subtitle">Importer, inspecter, prévisualiser et exporter sans manipuler de scripts.</p></div><div class="version">V0.4.1 expérimental</div></div>
+   <div class="head"><div><h1>Atelier d'archives H5P</h1><p class="subtitle">Importer, inspecter, prévisualiser et exporter sans manipuler de scripts.</p></div><div class="version">V0.4.2 expérimental</div></div>
    <div class="notice" id="message" role="status" aria-live="polite" hidden></div>
    <section class="panel" id="dropZone">
       <div class="drop"><div class="symbol" aria-hidden="true">&#8682;</div><h2>Ouvrir une activité .h5p</h2>
@@ -56,15 +56,6 @@
       <section class="panel" data-panel="libraries" hidden>
         <div class="sectionhead"><h2>Bibliothèques embarquées</h2><span class="filehint">lecture seule</span></div>
         <p class="info">Ces versions proviennent exclusivement des fichiers <code>library.json</code> de l'archive. Elles ne sont pas mises à jour automatiquement.</p>
-        <details class="registry-details"><summary>Dernier rapport d’importation : installations, doublons et rejets</summary>
-          <pre id="registryImportReport" class="report">Importez un H5P pour obtenir un rapport détaillé de cette opération.</pre>
-        </details>
-        <div class="panel-inline registry-audit">
-          <h3>Contrôle du lecteur et des dépendances</h3>
-          <p class="muted" id="coreEvidenceStatus">API H5P Core embarquée : non certifiée. Version du lecteur et API H5P sont deux informations différentes.</p>
-          <button id="registryResolveBtn" class="secondary" type="button" disabled>Analyser les dépendances de l’activité ouverte</button>
-          <pre id="registryResolveReport" class="report">Aucun contrôle réalisé. Les versions retenues ne sont pas appliquées aux fichiers.</pre>
-        </div>
         <div style="overflow:auto"><table class="data-table"><thead><tr><th>Bibliothèque</th><th>Version</th><th>API cœur déclarée</th><th>Répertoire</th></tr></thead><tbody id="librariesTable"></tbody></table></div>
       </section>
       <section class="panel" data-panel="preview" hidden>

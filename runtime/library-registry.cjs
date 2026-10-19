@@ -61,6 +61,68 @@ async function readJsonLimited(f,max=MAX_JSON) {
   const raw=await f.async('nodebuffer');if(raw.length>max)throw Error('library.json trop volumineux');
   try{return JSON.parse(raw.toString('utf8'));}catch(e){throw Error('library.json invalide : '+e.message);}
 }
+// Commit a complete library with a ready marker. On Windows, anti-malware
+// scanners can temporarily hold files/directories open and cause EPERM on
+// directory rename. Retry, then use a marker-last copy fallback. Never replace
+// a previously registered variant or a suspicious incomplete destination.
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function stateOfDestination(dest){
+  let st;
+  try{st=await fsp.lstat(dest);}catch(e){if(e.code==='ENOENT')return 'absent';throw e;}
+  if(!st.isDirectory()||st.isSymbolicLink())return 'blocked';
+  try{const marker=await fsp.lstat(path.join(dest,'.studio-library.json'));
+    return marker.isFile()&&!marker.isSymbolicLink()?'complete':'incomplete';
+  }catch(e){if(e.code==='ENOENT')return 'incomplete';throw e;}
+}
+async function commitStaging(staging,dest,{rename=fsp.rename,retryDelays=[150,400,800]}={}){
+  await fsp.mkdir(path.dirname(dest),{recursive:true});
+  const existing=await stateOfDestination(dest);
+  if(existing==='complete')return {status:'already-installed',method:'existing'};
+  if(existing!=='absent')throw Error('Destination existante mais incomplète ou non sûre : '+dest+' ; aucune donnée écrasée.');
+  let lastError;
+  for(let attempt=0;attempt<=retryDelays.length;attempt++){
+    try {await rename(staging,dest);return {status:'installed',method:'rename'};}
+    catch(e){
+      lastError=e;
+      const state=await stateOfDestination(dest);
+      if(state==='complete')return {status:'already-installed',method:'existing'};
+      if(state!=='absent')throw Error('Destination déjà présente ou incomplète : '+dest+' ; aucune donnée écrasée.');
+      if(!['EPERM','EACCES','EBUSY'].includes(e.code))throw e;
+      if(attempt<retryDelays.length)await pause(retryDelays[attempt]);
+    }
+  }
+  // The fallback avoids directory rename altogether. Payload first, completion
+  // marker last. List operations ignore any incomplete destination.
+  try {await fsp.mkdir(dest);}
+  catch(e){if(e.code==='EEXIST')throw Error('Destination créée simultanément ; import interrompu pour éviter un écrasement.');throw e;}
+  try{
+    await fsp.cp(path.join(staging,'payload'),path.join(dest,'payload'),{recursive:true,force:false,errorOnExist:true});
+    await fsp.copyFile(path.join(staging,'.studio-library.json'),path.join(dest,'.studio-library.json'),fs.constants.COPYFILE_EXCL);
+    return {status:'installed',method:'copy-fallback'};
+  }catch(e){
+    await fsp.rm(dest,{recursive:true,force:true}).catch(()=>{});
+    throw Error('Déplacement refusé ('+(lastError?.code||'?')+') et copie de secours impossible ('+(e.code||e.message)+'). Vérifiez les droits du dossier et les protections Windows.');
+  }
+}
+// Persist only diagnostic outcomes. Registry data and H5P content are not altered.
+async function saveLastImport(root,result,sourceName){
+  ensureSafeRoot(root);
+  const payload={date:new Date().toISOString(),sourceName:sanitizeLabel(sourceName),
+    totalFound:result.totalFound,counts:result.counts,outcomes:result.outcomes,
+    notice:result.notice};
+  await fsp.mkdir(root,{recursive:true});
+  const tmp=path.join(root,'.last-import-'+crypto.randomUUID()+'.tmp');
+  try{await fsp.writeFile(tmp,JSON.stringify(payload,null,2),'utf8');
+    await fsp.rename(tmp,path.join(root,'last-import-report.json'));}
+  finally{await fsp.rm(tmp,{force:true}).catch(()=>{});}
+}
+async function readLastImport(root){
+  ensureSafeRoot(root);
+  try {const raw=await fsp.readFile(path.join(root,'last-import-report.json'),'utf8');
+    if(raw.length>2000000)throw Error('Rapport d’importation trop volumineux.');
+    const parsed=JSON.parse(raw);return isObject(parsed)&&Array.isArray(parsed.outcomes)?parsed:null;
+  }catch(e){if(e.code==='ENOENT')return null;throw e;}
+}
 async function extractLibraries(source,root,{sourceName='import local',origin='local'}={}) {
   ensureSafeRoot(root);
   if(!Buffer.isBuffer(source)&&!(source instanceof Uint8Array))throw Error('Archive absente.');
@@ -114,9 +176,17 @@ async function extractLibraries(source,root,{sourceName='import local',origin='l
       }
       await fsp.writeFile(path.join(staging,'.studio-library.json'),JSON.stringify(meta,null,2),'utf8');
       await fsp.mkdir(path.dirname(dest),{recursive:true});
-      // No replacement of an existing variant.
-      try{await fsp.rename(staging,dest);staging=null;installed.push(meta);outcomes.push({manifest:manifestPath,status:'installed',library:info.machineName,version:versionString(info),id:variantId});}
-      catch(e){if(e.code==='EEXIST'||e.code==='ENOTEMPTY'){skipped.push(meta);outcomes.push({manifest:manifestPath,status:'already-installed',library:info.machineName,version:versionString(info),id:variantId,reason:'Variante existante'});}else throw e;}
+      // No replacement of an existing variant, including incomplete folders.
+      const commit=await commitStaging(staging,dest);
+      if(commit.method==='rename')staging=null; // moved, no cleanup necessary
+      if(commit.status==='installed'){
+        installed.push(meta);
+        outcomes.push({manifest:manifestPath,status:'installed',library:info.machineName,version:versionString(info),id:variantId,
+          reason:commit.method==='copy-fallback'?'Copie de secours après verrouillage Windows du déplacement':undefined});
+      }else{
+        skipped.push(meta);
+        outcomes.push({manifest:manifestPath,status:'already-installed',library:info.machineName,version:versionString(info),id:variantId,reason:'Variante existante'});
+      }
     }catch(e){const reason=String(e.message||e).slice(0,500);errors.push({library:manifestPath,reason});outcomes.push({manifest:manifestPath,status:'rejected',reason});}
     finally{if(staging)await fsp.rm(staging,{recursive:true,force:true}).catch(()=>{});}
   }
@@ -168,4 +238,5 @@ async function setChoice(root,projectId,machineName,variantId){
   return {projectId,machineName,variantId};
 }
 const fingerprint = bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
-module.exports={extractLibraries,listLibraries,setChoice,readChoices,fingerprint,normalizeLibrary,normalizeDep,versionString,safePath};
+module.exports={extractLibraries,listLibraries,setChoice,readChoices,fingerprint,normalizeLibrary,normalizeDep,versionString,safePath,
+  commitStaging,saveLastImport,readLastImport};
