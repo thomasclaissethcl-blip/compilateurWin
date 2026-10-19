@@ -1,0 +1,65 @@
+name: Préparer les bibliothèques Game Map
+on:
+  workflow_dispatch:
+    inputs:
+      game_map_ref:
+        description: 'Tag, branche ou SHA du lecteur Game Map (ex. 1.9.8)'
+        required: true
+        default: '1.9.8'
+      editor_ref:
+        description: 'Tag, branche ou SHA de H5PEditor.GameMap (ex. master)'
+        required: true
+        default: 'master'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Sources H5P Studio, utilisées uniquement pour empaqueter
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          path: studio
+      - name: Préparer Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Récupérer Game Map
+        uses: actions/checkout@v4
+        with:
+          repository: otacke/h5p-game-map
+          ref: ${{ inputs.game_map_ref }}
+          persist-credentials: false
+          path: game-map
+      - name: Récupérer le composant d'édition Game Map
+        uses: actions/checkout@v4
+        with:
+          repository: otacke/h5p-editor-game-map
+          ref: ${{ inputs.editor_ref }}
+          persist-credentials: false
+          path: editor-game-map
+      - name: Compiler Game Map
+        working-directory: game-map
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Compiler H5PEditor.GameMap
+        working-directory: editor-game-map
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Vérifier et préparer les deux archives ZIP
+        run: |
+          node studio/scripts/pack-built-library.cjs game-map output/H5P.GameMap.zip
+          node studio/scripts/pack-built-library.cjs editor-game-map output/H5PEditor.GameMap.zip
+          git -C game-map rev-parse HEAD > output/GAMEMAP-COMMIT.txt
+          git -C editor-game-map rev-parse HEAD > output/EDITOR-COMMIT.txt
+      - name: Archiver les bibliothèques compilées
+        uses: actions/upload-artifact@v4
+        with:
+          name: H5P-GameMap-bibliotheques-compilees
+          path: output/
+          if-no-files-found: error
+          retention-days: 14
